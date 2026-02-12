@@ -1,0 +1,436 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>变形目标 - Three.js动画教程</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            overflow: hidden;
+        }
+
+        #canvas-container {
+            width: 100vw;
+            height: 100vh;
+            display: block;
+        }
+
+        #info {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            max-width: 350px;
+            font-size: 14px;
+            line-height: 1.6;
+            backdrop-filter: blur(10px);
+        }
+
+        #info h2 {
+            margin-bottom: 10px;
+            color: #667eea;
+            font-size: 18px;
+        }
+
+        #info p {
+            margin-bottom: 8px;
+        }
+
+        #info code {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Courier New', monospace;
+        }
+
+        #controls {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            font-size: 14px;
+            backdrop-filter: blur(10px);
+            max-width: 300px;
+        }
+
+        #controls h3 {
+            margin-bottom: 15px;
+            color: #667eea;
+            font-size: 16px;
+        }
+
+        #controls label {
+            display: block;
+            margin-bottom: 12px;
+        }
+
+        #controls input[type="range"] {
+            width: 100%;
+            margin-top: 5px;
+        }
+
+        #controls select {
+            width: 100%;
+            padding: 5px;
+            margin-top: 5px;
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 5px;
+        }
+
+        #controls select option {
+            background: #1a1a2e;
+        }
+    </style>
+</head>
+<body>
+    <div id="canvas-container"></div>
+
+    <div id="info">
+        <h2>变形目标</h2>
+        <p>本示例演示变形目标动画。</p>
+        <p><strong>核心概念：</strong></p>
+        <p>• <code>morphAttributes</code>: 变形属性</p>
+        <p>• <code>morphTargetInfluences</code>: 变形影响</p>
+        <p>• <code>morphTargetDictionary</code>: 变形字典</p>
+        <p>• <code>程序化变形</code>: Procedural Morphing</p>
+        <p><strong>操作说明：</strong></p>
+        <p>• 使用右侧控制面板调整参数</p>
+        <p>• 鼠标拖拽：旋转视角</p>
+        <p>• 滚轮：缩放</p>
+    </div>
+
+    <div id="controls">
+        <h3>变形控制</h3>
+        
+        <label>
+            动画类型:
+            <select id="animationType">
+                <option value="sine">正弦波</option>
+                <option value="pulse">脉冲</option>
+                <option value="wave">波浪</option>
+                <option value="random">随机</option>
+            </select>
+        </label>
+        
+        <label>
+            速度:
+            <input type="range" id="speed" min="0.1" max="3" step="0.1" value="1">
+        </label>
+        
+        <label>
+            幅度:
+            <input type="range" id="amplitude" min="0.1" max="1" step="0.1" value="0.5">
+        </label>
+        
+        <label>
+            网格细分:
+            <input type="range" id="segments" min="5" max="30" step="1" value="15">
+        </label>
+    </div>
+
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        let scene, camera, renderer, controls;
+        let plane, sphere;
+        let clock;
+        let animationType = 'sine';
+        let speed = 1;
+        let amplitude = 0.5;
+
+        function init() {
+            const container = document.getElementById('canvas-container');
+
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x1a1a2e);
+
+            camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(0, 5, 10);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            container.appendChild(renderer.domElement);
+
+            controls = new OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.05;
+
+            clock = new THREE.Clock();
+
+            createLights();
+            createObjects();
+            setupEventListeners();
+
+            animate();
+        }
+
+        function createLights() {
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
+            scene.add(ambientLight);
+
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
+            directionalLight.position.set(5, 10, 5);
+            directionalLight.castShadow = true;
+            directionalLight.shadow.mapSize.width = 2048;
+            directionalLight.shadow.mapSize.height = 2048;
+            scene.add(directionalLight);
+
+            const pointLight = new THREE.PointLight(0x667eea, 0.5, 20);
+            pointLight.position.set(-5, 5, 5);
+            scene.add(pointLight);
+        }
+
+        function createMorphedPlane(segments = 15) {
+            const geometry = new THREE.PlaneGeometry(10, 10, segments, segments);
+            const positionAttribute = geometry.attributes.position;
+            const vertexCount = positionAttribute.count;
+
+            const morphTarget1 = new Float32Array(vertexCount * 3);
+            const morphTarget2 = new Float32Array(vertexCount * 3);
+            const morphTarget3 = new Float32Array(vertexCount * 3);
+
+            for (let i = 0; i < vertexCount; i++) {
+                const x = positionAttribute.getX(i);
+                const y = positionAttribute.getY(i);
+                const z = positionAttribute.getZ(i);
+
+                const distance = Math.sqrt(x * x + y * y);
+                const angle = Math.atan2(y, x);
+
+                morphTarget1[i * 3] = 0;
+                morphTarget1[i * 3 + 1] = 0;
+                morphTarget1[i * 3 + 2] = Math.sin(distance * 2) * amplitude;
+
+                morphTarget2[i * 3] = 0;
+                morphTarget2[i * 3 + 1] = 0;
+                morphTarget2[i * 3 + 2] = Math.cos(angle * 3) * amplitude;
+
+                morphTarget3[i * 3] = 0;
+                morphTarget3[i * 3 + 1] = 0;
+                morphTarget3[i * 3 + 2] = Math.sin(x * 0.5) * Math.cos(y * 0.5) * amplitude;
+            }
+
+            geometry.morphAttributes.position = [morphTarget1, morphTarget2, morphTarget3];
+            geometry.morphTargetsRelative = true;
+
+            const material = new THREE.MeshStandardMaterial({
+                color: 0x667eea,
+                roughness: 0.5,
+                metalness: 0.5,
+                side: THREE.DoubleSide,
+                flatShading: false
+            });
+
+            const mesh = new THREE.Mesh(geometry, material);
+            mesh.rotation.x = -Math.PI / 2;
+            mesh.castShadow = true;
+            mesh.receiveShadow = true;
+
+            return mesh;
+        }
+
+        function createMorphedSphere() {
+            const geometry = new THREE.SphereGeometry(2, 32, 32);
+            const positionAttribute = geometry.attributes.position;
+            const vertexCount = positionAttribute.count;
+
+            const morphTarget1 = new Float32Array(vertexCount * 3);
+            const morphTarget2 = new Float32Array(vertexCount * 3);
+
+            for (let i = 0; i < vertexCount; i++) {
+                const x = positionAttribute.getX(i);
+                const y = positionAttribute.getY(i);
+                const z = positionAttribute.getZ(i);
+
+                const normal = new THREE.Vector3(x, y, z).normalize();
+
+                morphTarget1[i * 3] = normal.x * 0.3;
+                morphTarget1[i * 3 + 1] = normal.y * 0.3;
+                morphTarget1[i * 3 + 2] = normal.z * 0.3;
+
+                morphTarget2[i * 3] = -normal.x * 0.2;
+                morphTarget2[i * 3 + 1] = -normal.y * 0.2;
+                morphTarget2[i * 3 + 2] = -normal.z * 0.2;
+            }
+
+            geometry.morphAttributes.position = [morphTarget1, morphTarget2];
+            geometry.morphTargetsRelative = true;
+
+            const material = new THREE.MeshStandardMaterial({
+                color: 0x764ba2,
+                roughness: 0.3,
+                metalness: 0.7
+            });
+
+            const mesh = new THREE.Mesh(geometry, material);
+            mesh.position.set(0, 3, 0);
+            mesh.castShadow = true;
+            mesh.receiveShadow = true;
+
+            return mesh;
+        }
+
+        function createObjects() {
+            plane = createMorphedPlane(15);
+            scene.add(plane);
+
+            sphere = createMorphedSphere();
+            scene.add(sphere);
+
+            const floorGeometry = new THREE.PlaneGeometry(20, 20);
+            const floorMaterial = new THREE.MeshStandardMaterial({
+                color: 0x333333,
+                roughness: 0.9,
+                metalness: 0.0
+            });
+            const floor = new THREE.Mesh(floorGeometry, floorMaterial);
+            floor.rotation.x = -Math.PI / 2;
+            floor.position.y = -2;
+            floor.receiveShadow = true;
+            scene.add(floor);
+        }
+
+        function updateSineAnimation(t) {
+            if (plane && plane.morphTargetInfluences) {
+                plane.morphTargetInfluences[0] = (Math.sin(t * 2) + 1) / 2 * amplitude;
+                plane.morphTargetInfluences[1] = (Math.sin(t * 2 + Math.PI / 2) + 1) / 2 * amplitude;
+                plane.morphTargetInfluences[2] = (Math.sin(t * 2 + Math.PI) + 1) / 2 * amplitude;
+            }
+
+            if (sphere && sphere.morphTargetInfluences) {
+                sphere.morphTargetInfluences[0] = (Math.sin(t * 1.5) + 1) / 2 * amplitude;
+                sphere.morphTargetInfluences[1] = (Math.sin(t * 1.5 + Math.PI) + 1) / 2 * amplitude;
+            }
+        }
+
+        function updatePulseAnimation(t) {
+            if (plane && plane.morphTargetInfluences) {
+                const pulse = Math.abs(Math.sin(t * 3)) * amplitude;
+                plane.morphTargetInfluences[0] = pulse;
+                plane.morphTargetInfluences[1] = pulse * 0.5;
+                plane.morphTargetInfluences[2] = pulse * 0.3;
+            }
+
+            if (sphere && sphere.morphTargetInfluences) {
+                const pulse = Math.abs(Math.sin(t * 2)) * amplitude;
+                sphere.morphTargetInfluences[0] = pulse;
+                sphere.morphTargetInfluences[1] = pulse * 0.5;
+            }
+        }
+
+        function updateWaveAnimation(t) {
+            if (plane && plane.morphTargetInfluences) {
+                plane.morphTargetInfluences[0] = Math.sin(t * 2) * amplitude;
+                plane.morphTargetInfluences[1] = Math.sin(t * 2 + Math.PI / 3) * amplitude;
+                plane.morphTargetInfluences[2] = Math.sin(t * 2 + Math.PI * 2 / 3) * amplitude;
+            }
+
+            if (sphere && sphere.morphTargetInfluences) {
+                sphere.morphTargetInfluences[0] = Math.sin(t * 1.5) * amplitude;
+                sphere.morphTargetInfluences[1] = Math.cos(t * 1.5) * amplitude;
+            }
+        }
+
+        function updateRandomAnimation(t) {
+            if (plane && plane.morphTargetInfluences) {
+                plane.morphTargetInfluences[0] = (Math.sin(t * 1.7) + Math.cos(t * 2.3)) * 0.5 * amplitude;
+                plane.morphTargetInfluences[1] = (Math.sin(t * 1.9) + Math.cos(t * 2.1)) * 0.5 * amplitude;
+                plane.morphTargetInfluences[2] = (Math.sin(t * 2.2) + Math.cos(t * 1.8)) * 0.5 * amplitude;
+            }
+
+            if (sphere && sphere.morphTargetInfluences) {
+                sphere.morphTargetInfluences[0] = (Math.sin(t * 1.3) + Math.cos(t * 1.7)) * 0.5 * amplitude;
+                sphere.morphTargetInfluences[1] = (Math.sin(t * 1.5) + Math.cos(t * 1.9)) * 0.5 * amplitude;
+            }
+        }
+
+        function setupEventListeners() {
+            window.addEventListener('resize', onWindowResize);
+
+            document.getElementById('animationType').addEventListener('change', (e) => {
+                animationType = e.target.value;
+            });
+
+            document.getElementById('speed').addEventListener('input', (e) => {
+                speed = parseFloat(e.target.value);
+            });
+
+            document.getElementById('amplitude').addEventListener('input', (e) => {
+                amplitude = parseFloat(e.target.value);
+            });
+
+            document.getElementById('segments').addEventListener('input', (e) => {
+                const segments = parseInt(e.target.value);
+                scene.remove(plane);
+                plane = createMorphedPlane(segments);
+                scene.add(plane);
+            });
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            const t = clock.getElapsedTime();
+
+            switch(animationType) {
+                case 'sine':
+                    updateSineAnimation(t);
+                    break;
+                case 'pulse':
+                    updatePulseAnimation(t);
+                    break;
+                case 'wave':
+                    updateWaveAnimation(t);
+                    break;
+                case 'random':
+                    updateRandomAnimation(t);
+                    break;
+            }
+
+            if (sphere) {
+                sphere.rotation.y += 0.01 * speed;
+            }
+
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        init();
+    </script>
+</body>
+</html>

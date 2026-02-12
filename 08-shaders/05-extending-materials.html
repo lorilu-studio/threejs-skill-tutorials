@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>扩展材质 - Three.js Shaders教程</title>
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+      font-family: Arial, sans-serif;
+    }
+    #info {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      background: rgba(0, 0, 0, 0.7);
+      color: white;
+      padding: 15px;
+      border-radius: 5px;
+      max-width: 300px;
+    }
+    #controls {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      background: rgba(0, 0, 0, 0.7);
+      color: white;
+      padding: 15px;
+      border-radius: 5px;
+      max-width: 250px;
+    }
+    #controls label {
+      display: block;
+      margin: 10px 0 5px 0;
+    }
+    #controls input[type="range"] {
+      width: 100%;
+    }
+  </style>
+</head>
+<body>
+  <div id="info">
+    <h3>扩展材质</h3>
+    <p>修改内置材质的着色器</p>
+    <p style="font-size: 12px; margin-top: 10px;">
+      • onBeforeCompile<br>
+      • 注入着色器代码<br>
+      • 修改顶点着色器<br>
+      • 修改片段着色器
+    </p>
+  </div>
+  <div id="controls">
+    <h3>控制面板</h3>
+    <label>波动强度: <span id="wave-value">0.1</span></label>
+    <input type="range" id="wave-slider" min="0" max="0.5" step="0.01" value="0.1">
+    <label>波动频率: <span id="freq-value">5.0</span></label>
+    <input type="range" id="freq-slider" min="1" max="20" step="0.5" value="5">
+    <label>动画速度: <span id="speed-value">1.0</span></label>
+    <input type="range" id="speed-slider" min="0" max="3" step="0.1" value="1.0">
+  </div>
+
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+      "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+    }
+  }
+  </script>
+
+  <script type="module">
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+    let scene, camera, renderer, controls;
+    let clock;
+    let extendedMaterial;
+
+    function init() {
+      scene = new THREE.Scene();
+      scene.background = new THREE.Color(0x333333);
+
+      camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+      camera.position.set(0, 2, 5);
+
+      renderer = new THREE.WebGLRenderer({ antialias: true });
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.setPixelRatio(window.devicePixelRatio);
+      document.body.appendChild(renderer.domElement);
+
+      controls = new OrbitControls(camera, renderer.domElement);
+      controls.enableDamping = true;
+      controls.dampingFactor = 0.05;
+
+      clock = new THREE.Clock();
+
+      const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
+      scene.add(ambientLight);
+
+      const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
+      directionalLight.position.set(5, 10, 7);
+      scene.add(directionalLight);
+
+      const gridHelper = new THREE.GridHelper(10, 10, 0x888888, 0x444444);
+      scene.add(gridHelper);
+
+      createExtendedMaterial();
+
+      setupControls();
+
+      window.addEventListener('resize', onWindowResize);
+    }
+
+    function createExtendedMaterial() {
+      extendedMaterial = new THREE.MeshStandardMaterial({
+        color: 0x667eea,
+        metalness: 0.3,
+        roughness: 0.4
+      });
+
+      extendedMaterial.onBeforeCompile = (shader) => {
+        shader.uniforms.time = { value: 0 };
+        shader.uniforms.waveStrength = { value: 0.1 };
+        shader.uniforms.waveFrequency = { value: 5.0 };
+
+        extendedMaterial.userData.shader = shader;
+
+        shader.vertexShader = `
+          uniform float time;
+          uniform float waveStrength;
+          uniform float waveFrequency;
+        ` + shader.vertexShader;
+
+        shader.vertexShader = shader.vertexShader.replace(
+          '#include <begin_vertex>',
+          `
+          #include <begin_vertex>
+          float wave = sin(position.x * waveFrequency + time) * waveStrength;
+          wave += sin(position.y * waveFrequency + time) * waveStrength;
+          transformed.z += wave;
+          `
+        );
+      };
+
+      const sphereGeometry = new THREE.SphereGeometry(1.5, 64, 64);
+      const sphere = new THREE.Mesh(sphereGeometry, extendedMaterial);
+      sphere.position.set(0, 1.5, 0);
+      scene.add(sphere);
+
+      const torusGeometry = new THREE.TorusGeometry(1, 0.4, 32, 100);
+      const torus = new THREE.Mesh(torusGeometry, extendedMaterial.clone());
+      torus.position.set(3, 1, 0);
+      scene.add(torus);
+
+      const boxGeometry = new THREE.BoxGeometry(2, 2, 2);
+      const box = new THREE.Mesh(boxGeometry, extendedMaterial.clone());
+      box.position.set(-3, 1, 0);
+      scene.add(box);
+    }
+
+    function setupControls() {
+      const waveSlider = document.getElementById('wave-slider');
+      const freqSlider = document.getElementById('freq-slider');
+      const speedSlider = document.getElementById('speed-slider');
+
+      waveSlider.addEventListener('input', (e) => {
+        const value = parseFloat(e.target.value);
+        document.getElementById('wave-value').textContent = value.toFixed(2);
+
+        scene.traverse((object) => {
+          if (object.isMesh && object.material.userData.shader) {
+            object.material.userData.shader.uniforms.waveStrength.value = value;
+          }
+        });
+      });
+
+      freqSlider.addEventListener('input', (e) => {
+        const value = parseFloat(e.target.value);
+        document.getElementById('freq-value').textContent = value.toFixed(1);
+
+        scene.traverse((object) => {
+          if (object.isMesh && object.material.userData.shader) {
+            object.material.userData.shader.uniforms.waveFrequency.value = value;
+          }
+        });
+      });
+
+      speedSlider.addEventListener('input', (e) => {
+        const value = parseFloat(e.target.value);
+        document.getElementById('speed-value').textContent = value.toFixed(1);
+      });
+    }
+
+    function onWindowResize() {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    }
+
+    function animate() {
+      requestAnimationFrame(animate);
+
+      const time = clock.getElapsedTime();
+      const speed = parseFloat(document.getElementById('speed-slider').value);
+
+      scene.traverse((object) => {
+        if (object.isMesh && object.material.userData.shader) {
+          object.material.userData.shader.uniforms.time.value = time * speed;
+        }
+      });
+
+      controls.update();
+      renderer.render(scene, camera);
+    }
+
+    init();
+    animate();
+  </script>
+</body>
+</html>

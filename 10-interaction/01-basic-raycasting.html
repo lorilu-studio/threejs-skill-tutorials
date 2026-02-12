@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>基本射线检测 - Three.js Interaction教程</title>
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+      font-family: Arial, sans-serif;
+    }
+    #info {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      background: rgba(0, 0, 0, 0.7);
+      color: white;
+      padding: 15px;
+      border-radius: 5px;
+      max-width: 300px;
+    }
+    #intersection-info {
+      position: absolute;
+      bottom: 10px;
+      left: 10px;
+      background: rgba(0, 0, 0, 0.7);
+      color: white;
+      padding: 15px;
+      border-radius: 5px;
+      max-width: 350px;
+      font-size: 14px;
+    }
+  </style>
+</head>
+<body>
+  <div id="info">
+    <h3>基本射线检测</h3>
+    <p>使用Raycaster检测对象相交</p>
+    <p style="font-size: 12px; margin-top: 10px;">
+      • Raycaster<br>
+      • 鼠标位置转换<br>
+      • 相交检测<br>
+      • 相交信息
+    </p>
+  </div>
+  <div id="intersection-info">
+    <h4>相交信息</h4>
+    <div id="intersection-data">移动鼠标查看相交信息</div>
+  </div>
+
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+      "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+    }
+  }
+  </script>
+
+  <script type="module">
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+    let scene, camera, renderer, controls;
+    let raycaster, mouse;
+    let intersectedObject = null;
+
+    function init() {
+      scene = new THREE.Scene();
+      scene.background = new THREE.Color(0x333333);
+
+      camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+      camera.position.set(0, 2, 5);
+
+      renderer = new THREE.WebGLRenderer({ antialias: true });
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.setPixelRatio(window.devicePixelRatio);
+      document.body.appendChild(renderer.domElement);
+
+      controls = new OrbitControls(camera, renderer.domElement);
+      controls.enableDamping = true;
+      controls.dampingFactor = 0.05;
+
+      raycaster = new THREE.Raycaster();
+      mouse = new THREE.Vector2();
+
+      const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+      scene.add(ambientLight);
+
+      const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
+      directionalLight.position.set(5, 10, 7);
+      scene.add(directionalLight);
+
+      const gridHelper = new THREE.GridHelper(10, 10, 0x888888, 0x444444);
+      scene.add(gridHelper);
+
+      createObjects();
+
+      window.addEventListener('mousemove', onMouseMove);
+      window.addEventListener('resize', onWindowResize);
+    }
+
+    function createObjects() {
+      const cubeGeometry = new THREE.BoxGeometry(2, 2, 2);
+      const cubeMaterial = new THREE.MeshStandardMaterial({ color: 0x667eea });
+      const cube = new THREE.Mesh(cubeGeometry, cubeMaterial);
+      cube.position.y = 1;
+      cube.userData.name = '立方体';
+      scene.add(cube);
+
+      const sphereGeometry = new THREE.SphereGeometry(1, 32, 32);
+      const sphereMaterial = new THREE.MeshStandardMaterial({ color: 0xff6b6b });
+      const sphere = new THREE.Mesh(sphereGeometry, sphereMaterial);
+      sphere.position.set(3, 1, 0);
+      sphere.userData.name = '球体';
+      scene.add(sphere);
+
+      const torusGeometry = new THREE.TorusGeometry(1, 0.4, 16, 100);
+      const torusMaterial = new THREE.MeshStandardMaterial({ color: 0x4ecdc4 });
+      const torus = new THREE.Mesh(torusGeometry, torusMaterial);
+      torus.position.set(-3, 1, 0);
+      torus.userData.name = '圆环';
+      scene.add(torus);
+    }
+
+    function onMouseMove(event) {
+      mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+      mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+
+      raycaster.setFromCamera(mouse, camera);
+      const intersects = raycaster.intersectObjects(scene.children);
+
+      if (intersects.length > 0) {
+        const intersect = intersects[0];
+        const object = intersect.object;
+
+        if (intersectedObject !== object) {
+          if (intersectedObject) {
+            intersectedObject.material.emissive.setHex(intersectedObject.currentHex);
+          }
+
+          intersectedObject = object;
+          intersectedObject.currentHex = intersectedObject.material.emissive.getHex();
+          intersectedObject.material.emissive.setHex(0x333333);
+        }
+
+        const infoDiv = document.getElementById('intersection-data');
+        infoDiv.innerHTML = `
+          <strong>对象:</strong> ${object.userData.name || '未命名'}<br>
+          <strong>距离:</strong> ${intersect.distance.toFixed(2)}<br>
+          <strong>相交点:</strong> (${intersect.point.x.toFixed(2)}, ${intersect.point.y.toFixed(2)}, ${intersect.point.z.toFixed(2)})<br>
+          <strong>UV坐标:</strong> (${intersect.uv.x.toFixed(2)}, ${intersect.uv.y.toFixed(2)})<br>
+          <strong>法线:</strong> (${intersect.normal.x.toFixed(2)}, ${intersect.normal.y.toFixed(2)}, ${intersect.normal.z.toFixed(2)})
+        `;
+      } else {
+        if (intersectedObject) {
+          intersectedObject.material.emissive.setHex(intersectedObject.currentHex);
+          intersectedObject = null;
+        }
+
+        document.getElementById('intersection-data').textContent = '未相交任何对象';
+      }
+    }
+
+    function onWindowResize() {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    }
+
+    function animate() {
+      requestAnimationFrame(animate);
+      controls.update();
+      renderer.render(scene, camera);
+    }
+
+    init();
+    animate();
+  </script>
+</body>
+</html>

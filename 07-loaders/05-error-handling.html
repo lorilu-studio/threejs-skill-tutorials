@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>错误处理 - Three.js Loaders教程</title>
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+      font-family: Arial, sans-serif;
+    }
+    #info {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      background: rgba(0, 0, 0, 0.7);
+      color: white;
+      padding: 15px;
+      border-radius: 5px;
+      max-width: 300px;
+    }
+    #loading {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: rgba(0, 0, 0, 0.8);
+      color: white;
+      padding: 20px;
+      border-radius: 10px;
+      text-align: center;
+      min-width: 300px;
+    }
+    #error-log {
+      margin-top: 20px;
+      text-align: left;
+      max-height: 200px;
+      overflow-y: auto;
+      background: #222;
+      padding: 10px;
+      border-radius: 5px;
+      font-size: 12px;
+    }
+    .error {
+      color: #f44336;
+      margin: 5px 0;
+    }
+    .success {
+      color: #4CAF50;
+      margin: 5px 0;
+    }
+    button {
+      margin-top: 15px;
+      padding: 10px 20px;
+      background: #4CAF50;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      font-size: 14px;
+    }
+    button:hover {
+      background: #45a049;
+    }
+  </style>
+</head>
+<body>
+  <div id="info">
+    <h3>错误处理</h3>
+    <p>处理加载错误和重试机制</p>
+  </div>
+  <div id="loading">
+    <h3>加载资源</h3>
+    <div id="status">准备加载...</div>
+    <div id="error-log"></div>
+    <button id="retry-btn" style="display: none;">重试</button>
+  </div>
+
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+      "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+    }
+  }
+  </script>
+
+  <script type="module">
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+    import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+    import { TextureLoader } from 'three/addons/loaders/TextureLoader.js';
+
+    let scene, camera, renderer, controls;
+    let retryCount = 0;
+    const maxRetries = 3;
+
+    function init() {
+      scene = new THREE.Scene();
+      scene.background = new THREE.Color(0x333333);
+
+      camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+      camera.position.set(0, 2, 5);
+
+      renderer = new THREE.WebGLRenderer({ antialias: true });
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.setPixelRatio(window.devicePixelRatio);
+      renderer.outputColorSpace = THREE.SRGBColorSpace;
+      document.body.appendChild(renderer.domElement);
+
+      controls = new OrbitControls(camera, renderer.domElement);
+      controls.enableDamping = true;
+      controls.dampingFactor = 0.05;
+
+      const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+      scene.add(ambientLight);
+
+      const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
+      directionalLight.position.set(5, 10, 7);
+      scene.add(directionalLight);
+
+      const gridHelper = new THREE.GridHelper(10, 10, 0x888888, 0x444444);
+      scene.add(gridHelper);
+
+      loadWithErrorHandling();
+
+      document.getElementById('retry-btn').addEventListener('click', () => {
+        retryCount++;
+        loadWithErrorHandling();
+      });
+
+      window.addEventListener('resize', onWindowResize);
+    }
+
+    function logError(message) {
+      const errorLog = document.getElementById('error-log');
+      const errorDiv = document.createElement('div');
+      errorDiv.className = 'error';
+      errorDiv.textContent = '❌ ' + message;
+      errorLog.appendChild(errorDiv);
+      errorLog.scrollTop = errorLog.scrollHeight;
+    }
+
+    function logSuccess(message) {
+      const errorLog = document.getElementById('error-log');
+      const successDiv = document.createElement('div');
+      successDiv.className = 'success';
+      successDiv.textContent = '✓ ' + message;
+      errorLog.appendChild(successDiv);
+      errorLog.scrollTop = errorLog.scrollHeight;
+    }
+
+    function loadWithErrorHandling() {
+      const loadingManager = new THREE.LoadingManager();
+
+      loadingManager.onProgress = function (url, itemsLoaded, itemsTotal) {
+        document.getElementById('status').textContent = `加载中... ${itemsLoaded}/${itemsTotal}`;
+      };
+
+      loadingManager.onLoad = function () {
+        document.getElementById('status').textContent = '加载完成!';
+        document.getElementById('loading').style.display = 'none';
+        logSuccess('所有资源加载成功');
+      };
+
+      loadingManager.onError = function (url) {
+        logError(`加载失败: ${url}`);
+        document.getElementById('retry-btn').style.display = 'inline-block';
+
+        if (retryCount >= maxRetries) {
+          document.getElementById('status').textContent = '加载失败，已达到最大重试次数';
+          document.getElementById('retry-btn').disabled = true;
+          document.getElementById('retry-btn').textContent = '重试次数已用尽';
+        }
+      };
+
+      const textureLoader = new TextureLoader(loadingManager);
+      const gltfLoader = new GLTFLoader(loadingManager);
+
+      const validTexture = 'https://threejs.org/examples/textures/brick_diffuse.jpg';
+      const invalidTexture = 'https://example.com/invalid-texture.jpg';
+      const validModel = 'https://threejs.org/examples/models/gltf/DamagedHelmet/glTF/DamagedHelmet.gltf';
+      const invalidModel = 'https://example.com/invalid-model.gltf';
+
+      textureLoader.load(validTexture, (texture) => {
+        texture.colorSpace = THREE.SRGBColorSpace;
+        logSuccess('砖块纹理加载成功');
+
+        const geometry = new THREE.BoxGeometry(2, 2, 2);
+        const material = new THREE.MeshStandardMaterial({
+          map: texture,
+          roughness: 0.8
+        });
+
+        const cube = new THREE.Mesh(geometry, material);
+        cube.position.y = 1;
+        scene.add(cube);
+      }, undefined, (error) => {
+        logError('砖块纹理加载失败');
+      });
+
+      textureLoader.load(invalidTexture, undefined, undefined, (error) => {
+        logError('无效纹理加载失败（预期错误）');
+      });
+
+      gltfLoader.load(validModel, (gltf) => {
+        gltf.scene.position.set(3, 1, 0);
+        gltf.scene.scale.set(1, 1, 1);
+        scene.add(gltf.scene);
+        logSuccess('头盔模型加载成功');
+      }, undefined, (error) => {
+        logError('头盔模型加载失败');
+      });
+
+      gltfLoader.load(invalidModel, undefined, undefined, (error) => {
+        logError('无效模型加载失败（预期错误）');
+      });
+    }
+
+    function onWindowResize() {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    }
+
+    function animate() {
+      requestAnimationFrame(animate);
+      controls.update();
+      renderer.render(scene, camera);
+    }
+
+    init();
+    animate();
+  </script>
+</body>
+</html>

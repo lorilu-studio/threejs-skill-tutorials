@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>基础动画 - Three.js动画教程</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            overflow: hidden;
+        }
+
+        #canvas-container {
+            width: 100vw;
+            height: 100vh;
+            display: block;
+        }
+
+        #info {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            max-width: 350px;
+            font-size: 14px;
+            line-height: 1.6;
+            backdrop-filter: blur(10px);
+        }
+
+        #info h2 {
+            margin-bottom: 10px;
+            color: #667eea;
+            font-size: 18px;
+        }
+
+        #info p {
+            margin-bottom: 8px;
+        }
+
+        #info code {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Courier New', monospace;
+        }
+
+        #controls {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            font-size: 14px;
+            backdrop-filter: blur(10px);
+            max-width: 300px;
+        }
+
+        #controls h3 {
+            margin-bottom: 15px;
+            color: #667eea;
+            font-size: 16px;
+        }
+
+        #controls label {
+            display: block;
+            margin-bottom: 12px;
+        }
+
+        #controls input[type="range"] {
+            width: 100%;
+            margin-top: 5px;
+        }
+
+        #controls select {
+            width: 100%;
+            padding: 5px;
+            margin-top: 5px;
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 5px;
+        }
+
+        #controls select option {
+            background: #1a1a2e;
+        }
+
+        #stats {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 15px;
+            border-radius: 10px;
+            font-size: 14px;
+            backdrop-filter: blur(10px);
+            font-family: 'Courier New', monospace;
+        }
+    </style>
+</head>
+<body>
+    <div id="canvas-container"></div>
+
+    <div id="info">
+        <h2>基础动画</h2>
+        <p>本示例演示Three.js基础动画。</p>
+        <p><strong>核心概念：</strong></p>
+        <p>• <code>Clock</code>: 时钟对象</p>
+        <p>• <code>getDelta()</code>: 获取时间增量</p>
+        <p>• <code>getElapsedTime()</code>: 获取总时间</p>
+        <p>• <code>requestAnimationFrame</code>: 动画循环</p>
+        <p><strong>操作说明：</strong></p>
+        <p>• 使用右侧控制面板调整参数</p>
+        <p>• 鼠标拖拽：旋转视角</p>
+        <p>• 滚轮：缩放</p>
+    </div>
+
+    <div id="controls">
+        <h3>动画控制</h3>
+        
+        <label>
+            动画类型:
+            <select id="animationType">
+                <option value="rotation">旋转动画</option>
+                <option value="orbit">轨道运动</option>
+                <option value="bounce">弹跳动画</option>
+                <option value="scale">缩放动画</option>
+                <option value="wave">波浪动画</option>
+            </select>
+        </label>
+        
+        <label>
+            速度:
+            <input type="range" id="speed" min="0.1" max="3" step="0.1" value="1">
+        </label>
+        
+        <label>
+            幅度:
+            <input type="range" id="amplitude" min="0.1" max="2" step="0.1" value="1">
+        </label>
+    </div>
+
+    <div id="stats">
+        <div>FPS: <span id="fps">0</span></div>
+        <div>Time: <span id="time">0.00</span>s</div>
+    </div>
+
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        let scene, camera, renderer, controls;
+        let cube, sphere, torus;
+        let clock;
+        let animationType = 'rotation';
+        let speed = 1;
+        let amplitude = 1;
+        let frameCount = 0;
+        let lastTime = performance.now();
+
+        function init() {
+            const container = document.getElementById('canvas-container');
+
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x1a1a2e);
+
+            camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(0, 3, 8);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            container.appendChild(renderer.domElement);
+
+            controls = new OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.05;
+
+            clock = new THREE.Clock();
+
+            createLights();
+            createObjects();
+            setupEventListeners();
+
+            animate();
+        }
+
+        function createLights() {
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
+            scene.add(ambientLight);
+
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
+            directionalLight.position.set(5, 10, 5);
+            directionalLight.castShadow = true;
+            directionalLight.shadow.mapSize.width = 2048;
+            directionalLight.shadow.mapSize.height = 2048;
+            scene.add(directionalLight);
+
+            const pointLight = new THREE.PointLight(0x667eea, 0.5, 20);
+            pointLight.position.set(-5, 5, 5);
+            scene.add(pointLight);
+        }
+
+        function createObjects() {
+            const material = new THREE.MeshStandardMaterial({
+                color: 0x667eea,
+                roughness: 0.5,
+                metalness: 0.5
+            });
+
+            const geometry1 = new THREE.BoxGeometry(1.5, 1.5, 1.5);
+            cube = new THREE.Mesh(geometry1, material);
+            cube.position.set(-3, 0, 0);
+            cube.castShadow = true;
+            cube.receiveShadow = true;
+            scene.add(cube);
+
+            const geometry2 = new THREE.SphereGeometry(0.8, 64, 64);
+            sphere = new THREE.Mesh(geometry2, material);
+            sphere.position.set(0, 0, 0);
+            sphere.castShadow = true;
+            sphere.receiveShadow = true;
+            scene.add(sphere);
+
+            const geometry3 = new THREE.TorusGeometry(0.6, 0.25, 32, 100);
+            torus = new THREE.Mesh(geometry3, material);
+            torus.position.set(3, 0, 0);
+            torus.castShadow = true;
+            torus.receiveShadow = true;
+            scene.add(torus);
+
+            const floorGeometry = new THREE.PlaneGeometry(20, 20);
+            const floorMaterial = new THREE.MeshStandardMaterial({
+                color: 0x333333,
+                roughness: 0.9,
+                metalness: 0.0
+            });
+            const floor = new THREE.Mesh(floorGeometry, floorMaterial);
+            floor.rotation.x = -Math.PI / 2;
+            floor.position.y = -2;
+            floor.receiveShadow = true;
+            scene.add(floor);
+        }
+
+        function updateAnimation(delta, elapsed) {
+            const t = elapsed * speed;
+
+            switch(animationType) {
+                case 'rotation':
+                    cube.rotation.x = t;
+                    cube.rotation.y = t * 0.5;
+                    sphere.rotation.y = t;
+                    torus.rotation.x = t;
+                    torus.rotation.z = t * 0.5;
+                    break;
+
+                case 'orbit':
+                    cube.position.x = Math.cos(t) * 3 * amplitude;
+                    cube.position.z = Math.sin(t) * 3 * amplitude;
+                    sphere.position.x = Math.cos(t + Math.PI * 2 / 3) * 3 * amplitude;
+                    sphere.position.z = Math.sin(t + Math.PI * 2 / 3) * 3 * amplitude;
+                    torus.position.x = Math.cos(t + Math.PI * 4 / 3) * 3 * amplitude;
+                    torus.position.z = Math.sin(t + Math.PI * 4 / 3) * 3 * amplitude;
+                    break;
+
+                case 'bounce':
+                    cube.position.y = Math.abs(Math.sin(t * 2)) * 2 * amplitude;
+                    sphere.position.y = Math.abs(Math.sin(t * 2 + Math.PI / 3)) * 2 * amplitude;
+                    torus.position.y = Math.abs(Math.sin(t * 2 + Math.PI * 2 / 3)) * 2 * amplitude;
+                    break;
+
+                case 'scale':
+                    const scale1 = 1 + Math.sin(t) * 0.3 * amplitude;
+                    const scale2 = 1 + Math.sin(t + Math.PI / 3) * 0.3 * amplitude;
+                    const scale3 = 1 + Math.sin(t + Math.PI * 2 / 3) * 0.3 * amplitude;
+                    cube.scale.set(scale1, scale1, scale1);
+                    sphere.scale.set(scale2, scale2, scale2);
+                    torus.scale.set(scale3, scale3, scale3);
+                    break;
+
+                case 'wave':
+                    cube.position.y = Math.sin(t * 2) * amplitude;
+                    sphere.position.y = Math.sin(t * 2 + Math.PI / 2) * amplitude;
+                    torus.position.y = Math.sin(t * 2 + Math.PI) * amplitude;
+                    cube.rotation.z = Math.sin(t) * 0.5;
+                    sphere.rotation.z = Math.sin(t + Math.PI / 2) * 0.5;
+                    torus.rotation.z = Math.sin(t + Math.PI) * 0.5;
+                    break;
+            }
+        }
+
+        function updateStats() {
+            frameCount++;
+            const currentTime = performance.now();
+            
+            if (currentTime - lastTime >= 1000) {
+                document.getElementById('fps').textContent = frameCount;
+                frameCount = 0;
+                lastTime = currentTime;
+            }
+
+            document.getElementById('time').textContent = clock.getElapsedTime().toFixed(2);
+        }
+
+        function setupEventListeners() {
+            window.addEventListener('resize', onWindowResize);
+
+            document.getElementById('animationType').addEventListener('change', (e) => {
+                animationType = e.target.value;
+                resetPositions();
+            });
+
+            document.getElementById('speed').addEventListener('input', (e) => {
+                speed = parseFloat(e.target.value);
+            });
+
+            document.getElementById('amplitude').addEventListener('input', (e) => {
+                amplitude = parseFloat(e.target.value);
+            });
+        }
+
+        function resetPositions() {
+            cube.position.set(-3, 0, 0);
+            sphere.position.set(0, 0, 0);
+            torus.position.set(3, 0, 0);
+            cube.rotation.set(0, 0, 0);
+            sphere.rotation.set(0, 0, 0);
+            torus.rotation.set(0, 0, 0);
+            cube.scale.set(1, 1, 1);
+            sphere.scale.set(1, 1, 1);
+            torus.scale.set(1, 1, 1);
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            const delta = clock.getDelta();
+            const elapsed = clock.getElapsedTime();
+
+            updateAnimation(delta, elapsed);
+            updateStats();
+
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        init();
+    </script>
+</body>
+</html>
