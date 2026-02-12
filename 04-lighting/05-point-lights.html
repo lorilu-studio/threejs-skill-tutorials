@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Three.js 点光源示例</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: Arial, sans-serif;
+        }
+        #info {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 15px;
+            border-radius: 8px;
+            font-size: 14px;
+            max-width: 350px;
+        }
+        #info h2 {
+            margin: 0 0 10px 0;
+            font-size: 18px;
+            color: #4CAF50;
+        }
+        #info p {
+            margin: 5px 0;
+            line-height: 1.5;
+        }
+        #controls {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 15px;
+            border-radius: 8px;
+            font-size: 14px;
+            width: 280px;
+        }
+        #controls h3 {
+            margin: 0 0 10px 0;
+            font-size: 16px;
+            color: #4CAF50;
+        }
+        .control-group {
+            margin-bottom: 10px;
+        }
+        .control-group label {
+            display: block;
+            margin-bottom: 5px;
+        }
+        .control-group input[type="range"] {
+            width: 100%;
+        }
+        .control-group input[type="color"] {
+            width: 100%;
+            height: 30px;
+            margin-top: 5px;
+        }
+        .control-group button {
+            width: 100%;
+            padding: 8px;
+            margin-top: 5px;
+            background: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        .control-group button:hover {
+            background: #45a049;
+        }
+    </style>
+</head>
+<body>
+    <div id="info">
+        <h2>点光源示例</h2>
+        <p>展示PointLight的使用方法</p>
+        <p>场景包含：</p>
+        <p>• 多个彩色点光源</p>
+        <p>• 光源衰减效果</p>
+        <p>• 实时光照计算</p>
+        <p>• 可调节的光源参数</p>
+    </div>
+
+    <div id="controls">
+        <h3>点光源控制</h3>
+        <div class="control-group">
+            <label>点光源1强度: <span id="point1IntensityValue">1.0</span></label>
+            <input type="range" id="point1Intensity" min="0" max="3" step="0.1" value="1.0">
+        </div>
+        <div class="control-group">
+            <label>点光源1距离: <span id="point1DistanceValue">20</span></label>
+            <input type="range" id="point1Distance" min="5" max="50" step="1" value="20">
+        </div>
+        <div class="control-group">
+            <label>点光源1衰减: <span id="point1DecayValue">2.0</span></label>
+            <input type="range" id="point1Decay" min="0" max="3" step="0.1" value="2.0">
+        </div>
+        <div class="control-group">
+            <label>点光源2强度: <span id="point2IntensityValue">1.0</span></label>
+            <input type="range" id="point2Intensity" min="0" max="3" step="0.1" value="1.0">
+        </div>
+        <div class="control-group">
+            <label>点光源3强度: <span id="point3IntensityValue">1.0</span></label>
+            <input type="range" id="point3Intensity" min="0" max="3" step="0.1" value="1.0">
+        </div>
+        <div class="control-group">
+            <label>移动速度: <span id="moveSpeedValue">0.5</span></label>
+            <input type="range" id="moveSpeed" min="0" max="2" step="0.1" value="0.5">
+        </div>
+        <div class="control-group">
+            <button id="toggleHelpers">切换点光源辅助线</button>
+        </div>
+    </div>
+
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+
+    <script type="module">
+        // 导入Three.js核心库和轨道控制器
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        // 全局变量声明
+        let scene, camera, renderer, controls;  // 场景、相机、渲染器、控制器
+        let pointLights = [];  // 存储所有点光源对象
+        let pointHelpers = [];  // 存储所有点光源辅助线
+        let spheres = [];  // 存储所有场景对象
+        let showHelpers = true;  // 辅助线显示状态
+        let moveSpeed = 0.5;  // 点光源移动速度
+
+        /**
+         * 初始化函数
+         * 创建场景、相机、渲染器等基础组件
+         */
+        function init() {
+            // 创建容器div并添加到body
+            const container = document.createElement('div');
+            document.body.appendChild(container);
+
+            // 创建场景对象
+            scene = new THREE.Scene();
+            // 设置场景背景颜色为深灰色
+            scene.background = new THREE.Color(0x222222);
+
+            // 创建透视相机
+            // 参数: 视野角度(60度), 宽高比, 近裁剪面(0.1), 远裁剪面(1000)
+            camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+            // 设置相机位置
+            camera.position.set(0, 8, 15);
+
+            // 创建WebGL渲染器
+            renderer = new THREE.WebGLRenderer({ antialias: true });  // 开启抗锯齿
+            renderer.setSize(window.innerWidth, window.innerHeight);  // 设置渲染尺寸
+            renderer.setPixelRatio(window.devicePixelRatio);  // 设置像素比，适配高清屏
+            renderer.shadowMap.enabled = true;  // 启用阴影映射
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;  // 使用柔和阴影
+            container.appendChild(renderer.domElement);  // 将渲染器添加到容器
+
+            // 创建轨道控制器
+            controls = new OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;  // 启用阻尼效果，使旋转更平滑
+            controls.dampingFactor = 0.05;  // 阻尼系数
+
+            // 创建点光源
+            createPointLights();
+            // 创建场景对象
+            createObjects();
+            // 创建地面
+            createFloor();
+            // 设置控制器
+            setupControls();
+
+            // 监听窗口大小变化
+            window.addEventListener('resize', onWindowResize);
+            // 开始动画循环
+            animate();
+        }
+
+        /**
+         * 创建点光源
+         * 创建三个不同颜色的点光源
+         */
+        function createPointLights() {
+            // 创建第一个点光源 - 红色
+            // 点光源从一点向所有方向发射光线，类似灯泡
+            // 参数: 颜色, 强度, 距离, 衰减
+            const pointLight1 = new THREE.PointLight(0xff0000, 1, 20, 2);
+            pointLight1.position.set(0, 5, 0);  // 设置光源位置
+            pointLight1.castShadow = true;  // 启用阴影投射
+            pointLight1.shadow.mapSize.width = 1024;  // 阴影贴图宽度
+            pointLight1.shadow.mapSize.height = 1024;  // 阴影贴图高度
+            pointLight1.shadow.bias = -0.005;  // 阴影偏移，防止阴影伪影
+            scene.add(pointLight1);
+            pointLights.push(pointLight1);
+
+            // 创建第二个点光源 - 绿色
+            const pointLight2 = new THREE.PointLight(0x00ff00, 1, 20, 2);
+            pointLight2.position.set(5, 5, 5);  // 设置光源位置
+            pointLight2.castShadow = true;  // 启用阴影投射
+            pointLight2.shadow.mapSize.width = 1024;  // 阴影贴图宽度
+            pointLight2.shadow.mapSize.height = 1024;  // 阴影贴图高度
+            pointLight2.shadow.bias = -0.005;  // 阴影偏移，防止阴影伪影
+            scene.add(pointLight2);
+            pointLights.push(pointLight2);
+
+            // 创建第三个点光源 - 蓝色
+            const pointLight3 = new THREE.PointLight(0x0000ff, 1, 20, 2);
+            pointLight3.position.set(-5, 5, -5);  // 设置光源位置
+            pointLight3.castShadow = true;  // 启用阴影投射
+            pointLight3.shadow.mapSize.width = 1024;  // 阴影贴图宽度
+            pointLight3.shadow.mapSize.height = 1024;  // 阴影贴图高度
+            pointLight3.shadow.bias = -0.005;  // 阴影偏移，防止阴影伪影
+            scene.add(pointLight3);
+            pointLights.push(pointLight3);
+
+            // 为每个点光源创建辅助线 - 可视化点光源位置
+            pointLights.forEach(pointLight => {
+                const helper = new THREE.PointLightHelper(pointLight, 1);
+                scene.add(helper);
+                pointHelpers.push(helper);
+            });
+
+            // 创建环境光 - 提供基础照明
+            const ambientLight = new THREE.AmbientLight(0x404040, 0.3);
+            scene.add(ambientLight);
+        }
+
+        /**
+         * 创建场景对象
+         * 创建多个球体和立方体，展示点光源效果
+         */
+        function createObjects() {
+            // 创建球体几何体
+            const geometry = new THREE.SphereGeometry(0.8, 32, 32);
+            // 创建标准材质
+            const material = new THREE.MeshStandardMaterial({
+                color: 0xffffff,  // 白色
+                roughness: 0.5,  // 粗糙度
+                metalness: 0.5  // 金属度
+            });
+
+            // 定义球体位置 - 中心一个，四周四个
+            const positions = [
+                { x: 0, y: 1, z: 0 },
+                { x: 3, y: 1, z: 3 },
+                { x: -3, y: 1, z: -3 },
+                { x: 3, y: 1, z: -3 },
+                { x: -3, y: 1, z: 3 }
+            ];
+
+            // 为每个位置创建一个球体
+            positions.forEach(pos => {
+                const sphere = new THREE.Mesh(geometry, material.clone());
+                sphere.position.set(pos.x, pos.y, pos.z);
+                sphere.castShadow = true;  // 投射阴影
+                sphere.receiveShadow = true;  // 接收阴影
+                scene.add(sphere);
+                spheres.push(sphere);
+            });
+
+            // 创建立方体几何体
+            const boxGeometry = new THREE.BoxGeometry(1.5, 1.5, 1.5);
+            // 创建标准材质
+            const boxMaterial = new THREE.MeshStandardMaterial({
+                color: 0xffffff,  // 白色
+                roughness: 0.3,  // 粗糙度
+                metalness: 0.7  // 金属度
+            });
+
+            // 创建4个立方体，排列成圆形
+            for (let i = 0; i < 4; i++) {
+                const box = new THREE.Mesh(boxGeometry, boxMaterial.clone());
+                const angle = (i / 4) * Math.PI * 2 + Math.PI / 4;  // 计算角度
+                const radius = 6;  // 半径
+                box.position.set(
+                    Math.cos(angle) * radius,  // X位置
+                    1,  // Y位置
+                    Math.sin(angle) * radius  // Z位置
+                );
+                box.castShadow = true;  // 投射阴影
+                box.receiveShadow = true;  // 接收阴影
+                scene.add(box);
+                spheres.push(box);
+            }
+        }
+
+        /**
+         * 创建地面
+         * 创建接收阴影的地面和网格辅助线
+         */
+        function createFloor() {
+            // 创建平面几何体
+            const floorGeometry = new THREE.PlaneGeometry(20, 20);
+            // 创建标准材质
+            const floorMaterial = new THREE.MeshStandardMaterial({
+                color: 0x444444,  // 深灰色
+                roughness: 0.8,  // 粗糙度
+                metalness: 0.2  // 金属度
+            });
+            const floor = new THREE.Mesh(floorGeometry, floorMaterial);
+            floor.rotation.x = -Math.PI / 2;  // 旋转90度使其水平
+            floor.position.y = 0;  // 设置地面高度
+            floor.receiveShadow = true;  // 接收阴影
+            scene.add(floor);
+
+            // 创建网格辅助线
+            const gridHelper = new THREE.GridHelper(20, 20, 0x666666, 0x555555);
+            gridHelper.position.y = 0.01;  // 稍微抬高避免z-fighting
+            scene.add(gridHelper);
+        }
+
+        /**
+         * 设置控制器
+         * 为滑块和按钮添加事件监听器
+         */
+        function setupControls() {
+            const point1IntensitySlider = document.getElementById('point1Intensity');
+            const point1DistanceSlider = document.getElementById('point1Distance');
+            const point1DecaySlider = document.getElementById('point1Decay');
+            const point2IntensitySlider = document.getElementById('point2Intensity');
+            const point3IntensitySlider = document.getElementById('point3Intensity');
+            const moveSpeedSlider = document.getElementById('moveSpeed');
+            const toggleHelpersBtn = document.getElementById('toggleHelpers');
+
+            const point1IntensityValue = document.getElementById('point1IntensityValue');
+            const point1DistanceValue = document.getElementById('point1DistanceValue');
+            const point1DecayValue = document.getElementById('point1DecayValue');
+            const point2IntensityValue = document.getElementById('point2IntensityValue');
+            const point3IntensityValue = document.getElementById('point3IntensityValue');
+            const moveSpeedValue = document.getElementById('moveSpeedValue');
+
+            // 点光源1强度滑块
+            point1IntensitySlider.addEventListener('input', (e) => {
+                const value = parseFloat(e.target.value);
+                point1IntensityValue.textContent = value.toFixed(1);
+                pointLights[0].intensity = value;  // 更新点光源强度
+            });
+
+            // 点光源1距离滑块
+            point1DistanceSlider.addEventListener('input', (e) => {
+                const value = parseFloat(e.target.value);
+                point1DistanceValue.textContent = value.toFixed(0);
+                pointLights[0].distance = value;  // 更新光照距离
+            });
+
+            // 点光源1衰减滑块
+            point1DecaySlider.addEventListener('input', (e) => {
+                const value = parseFloat(e.target.value);
+                point1DecayValue.textContent = value.toFixed(1);
+                pointLights[0].decay = value;  // 更新光线衰减系数
+            });
+
+            // 点光源2强度滑块
+            point2IntensitySlider.addEventListener('input', (e) => {
+                const value = parseFloat(e.target.value);
+                point2IntensityValue.textContent = value.toFixed(1);
+                pointLights[1].intensity = value;  // 更新点光源强度
+            });
+
+            // 点光源3强度滑块
+            point3IntensitySlider.addEventListener('input', (e) => {
+                const value = parseFloat(e.target.value);
+                point3IntensityValue.textContent = value.toFixed(1);
+                pointLights[2].intensity = value;  // 更新点光源强度
+            });
+
+            // 移动速度滑块
+            moveSpeedSlider.addEventListener('input', (e) => {
+                const value = parseFloat(e.target.value);
+                moveSpeedValue.textContent = value.toFixed(1);
+                moveSpeed = value;  // 更新移动速度
+            });
+
+            // 切换辅助线显示按钮
+            toggleHelpersBtn.addEventListener('click', () => {
+                showHelpers = !showHelpers;
+                pointHelpers.forEach(helper => {
+                    helper.visible = showHelpers;  // 更新辅助线可见性
+                });
+            });
+        }
+
+        /**
+         * 窗口大小变化处理
+         * 更新相机和渲染器参数
+         */
+        function onWindowResize() {
+            // 更新相机宽高比
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            // 更新渲染器尺寸
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        /**
+         * 动画循环
+         * 每帧更新场景并渲染
+         */
+        function animate() {
+            requestAnimationFrame(animate);  // 请求下一帧
+
+            // 获取当前时间（秒）
+            const time = Date.now() * 0.001;
+
+            // 更新点光源1位置 - 圆形运动
+            pointLights[0].position.x = Math.cos(time * moveSpeed) * 4;
+            pointLights[0].position.z = Math.sin(time * moveSpeed) * 4;
+            pointLights[0].position.y = 5 + Math.sin(time * moveSpeed * 2) * 1;
+
+            // 更新点光源2位置 - 圆形运动，相位偏移120度
+            pointLights[1].position.x = Math.cos(time * moveSpeed + Math.PI * 2 / 3) * 4;
+            pointLights[1].position.z = Math.sin(time * moveSpeed + Math.PI * 2 / 3) * 4;
+            pointLights[1].position.y = 5 + Math.sin(time * moveSpeed * 2 + Math.PI * 2 / 3) * 1;
+
+            // 更新点光源3位置 - 圆形运动，相位偏移240度
+            pointLights[2].position.x = Math.cos(time * moveSpeed + Math.PI * 4 / 3) * 4;
+            pointLights[2].position.z = Math.sin(time * moveSpeed + Math.PI * 4 / 3) * 4;
+            pointLights[2].position.y = 5 + Math.sin(time * moveSpeed * 2 + Math.PI * 4 / 3) * 1;
+
+            // 更新辅助线
+            pointHelpers.forEach(helper => {
+                helper.update();
+            });
+
+            // 更新控制器
+            controls.update();
+            // 渲染场景
+            renderer.render(scene, camera);
+        }
+
+        // 启动程序
+        init();
+    </script>
+</body>
+</html>

@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Three.js 阴影配置示例</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: Arial, sans-serif;
+        }
+        #info {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 15px;
+            border-radius: 8px;
+            font-size: 14px;
+            max-width: 350px;
+        }
+        #info h2 {
+            margin: 0 0 10px 0;
+            font-size: 18px;
+            color: #4CAF50;
+        }
+        #info p {
+            margin: 5px 0;
+            line-height: 1.5;
+        }
+        #controls {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 15px;
+            border-radius: 8px;
+            font-size: 14px;
+            width: 280px;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+        #controls h3 {
+            margin: 0 0 10px 0;
+            font-size: 16px;
+            color: #4CAF50;
+        }
+        .control-group {
+            margin-bottom: 10px;
+        }
+        .control-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-size: 12px;
+        }
+        .control-group input[type="range"] {
+            width: 100%;
+        }
+        .control-group select {
+            width: 100%;
+            padding: 5px;
+            margin-top: 5px;
+            background: #333;
+            color: white;
+            border: 1px solid #555;
+            border-radius: 4px;
+        }
+        .control-group button {
+            width: 100%;
+            padding: 8px;
+            margin-top: 5px;
+            background: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        .control-group button:hover {
+            background: #45a049;
+        }
+    </style>
+</head>
+<body>
+    <div id="info">
+        <h2>阴影配置示例</h2>
+        <p>展示Three.js阴影配置方法</p>
+        <p>场景包含：</p>
+        <p>• 旋转的立方体（投射阴影）</p>
+        <p>• 地面（接收阴影）</p>
+        <p>• 平行光（光源）</p>
+        <p>• 可调节的阴影参数</p>
+    </div>
+
+    <div id="controls">
+        <h3>阴影控制</h3>
+        <div class="control-group">
+            <label>阴影贴图类型</label>
+            <select id="shadowType">
+                <option value="BasicShadowMap">BasicShadowMap (最快)</option>
+                <option value="PCFShadowMap">PCFShadowMap (默认)</option>
+                <option value="PCFSoftShadowMap" selected>PCFSoftShadowMap (柔和)</option>
+                <option value="VSMShadowMap">VSMShadowMap (方差)</option>
+            </select>
+        </div>
+        <div class="control-group">
+            <label>阴影贴图大小: <span id="mapSizeValue">2048</span></label>
+            <input type="range" id="mapSize" min="512" max="4096" step="512" value="2048">
+        </div>
+        <div class="control-group">
+            <label>阴影偏移: <span id="biasValue">-0.0001</span></label>
+            <input type="range" id="bias" min="-0.01" max="0.01" step="0.0001" value="-0.0001">
+        </div>
+        <div class="control-group">
+            <label>法线偏移: <span id="normalBiasValue">0.02</span></label>
+            <input type="range" id="normalBias" min="0" max="0.1" step="0.01" value="0.02">
+        </div>
+        <div class="control-group">
+            <label>阴影半径: <span id="radiusValue">4</span></label>
+            <input type="range" id="radius" min="0" max="10" step="0.5" value="4">
+        </div>
+        <div class="control-group">
+            <label>光源位置 X: <span id="lightXValue">5</span></label>
+            <input type="range" id="lightX" min="-10" max="10" step="0.5" value="5">
+        </div>
+        <div class="control-group">
+            <label>光源位置 Y: <span id="lightYValue">10</span></label>
+            <input type="range" id="lightY" min="5" max="20" step="0.5" value="10">
+        </div>
+        <div class="control-group">
+            <label>光源位置 Z: <span id="lightZValue">5</span></label>
+            <input type="range" id="lightZ" min="-10" max="10" step="0.5" value="5">
+        </div>
+        <div class="control-group">
+            <button id="toggleHelper">切换阴影相机辅助线</button>
+        </div>
+        <div class="control-group">
+            <button id="resetShadows">重置阴影参数</button>
+        </div>
+    </div>
+
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+
+    <script type="module">
+        // 导入Three.js核心库和轨道控制器
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        // 全局变量声明
+        let scene, camera, renderer, controls;  // 场景、相机、渲染器、控制器
+        let directionalLight, shadowHelper;  // 平行光和阴影相机辅助线
+        let cube;  // 旋转的立方体
+        let showHelper = true;  // 辅助线显示状态
+
+        /**
+         * 初始化函数
+         * 创建场景、相机、渲染器等基础组件
+         */
+        function init() {
+            // 创建容器div并添加到body
+            const container = document.createElement('div');
+            document.body.appendChild(container);
+
+            // 创建场景对象
+            scene = new THREE.Scene();
+            // 设置场景背景颜色为深灰色
+            scene.background = new THREE.Color(0x222222);
+
+            // 创建透视相机
+            // 参数: 视野角度(60度), 宽高比, 近裁剪面(0.1), 远裁剪面(1000)
+            camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+            // 设置相机位置
+            camera.position.set(0, 8, 15);
+
+            // 创建WebGL渲染器
+            renderer = new THREE.WebGLRenderer({ antialias: true });  // 开启抗锯齿
+            renderer.setSize(window.innerWidth, window.innerHeight);  // 设置渲染尺寸
+            renderer.setPixelRatio(window.devicePixelRatio);  // 设置像素比，适配高清屏
+            renderer.shadowMap.enabled = true;  // 启用阴影映射
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;  // 使用柔和阴影
+            container.appendChild(renderer.domElement);  // 将渲染器添加到容器
+
+            // 创建轨道控制器
+            controls = new OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;  // 启用阻尼效果，使旋转更平滑
+            controls.dampingFactor = 0.05;  // 阻尼系数
+
+            // 创建光源
+            createLight();
+            // 创建场景对象
+            createObjects();
+            // 创建地面
+            createFloor();
+            // 设置控制器
+            setupControls();
+
+            // 监听窗口大小变化
+            window.addEventListener('resize', onWindowResize);
+            // 开始动画循环
+            animate();
+        }
+
+        /**
+         * 创建光源
+         * 创建平行光并配置阴影参数
+         */
+        function createLight() {
+            // 创建平行光 - 用于投射阴影
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
+            directionalLight.position.set(5, 10, 5);  // 设置光源位置
+            directionalLight.castShadow = true;  // 启用阴影投射
+
+            // 配置阴影贴图大小 - 越大阴影越清晰，但性能消耗越大
+            directionalLight.shadow.mapSize.width = 2048;
+            directionalLight.shadow.mapSize.height = 2048;
+
+            // 配置阴影相机参数
+            directionalLight.shadow.camera.near = 0.5;  // 近裁剪面
+            directionalLight.shadow.camera.far = 50;  // 远裁剪面
+
+            // 配置阴影相机的视锥体 - 决定阴影覆盖的范围
+            directionalLight.shadow.camera.left = -10;
+            directionalLight.shadow.camera.right = 10;
+            directionalLight.shadow.camera.top = 10;
+            directionalLight.shadow.camera.bottom = -10;
+
+            // 配置阴影偏移 - 防止阴影伪影（shadow acne）
+            // 负值将阴影推向物体表面，正值将阴影推离物体表面
+            directionalLight.shadow.bias = -0.0001;
+
+            // 配置法线偏移 - 基于法线的偏移，用于消除阴影伪影
+            directionalLight.shadow.normalBias = 0.02;
+
+            // 配置阴影半径 - 控制阴影边缘的柔和度
+            // 仅在PCFSoftShadowMap和VSMShadowMap中有效
+            directionalLight.shadow.radius = 4;
+
+            scene.add(directionalLight);
+            this.directionalLight = directionalLight;  // 保存引用
+
+            // 创建阴影相机辅助线 - 可视化阴影相机的视锥体
+            shadowHelper = new THREE.CameraHelper(directionalLight.shadow.camera);
+            scene.add(shadowHelper);
+
+            // 创建环境光 - 提供基础照明
+            const ambientLight = new THREE.AmbientLight(0x404040, 0.5);
+            scene.add(ambientLight);
+        }
+
+        /**
+         * 创建场景对象
+         * 创建旋转的立方体和两个球体
+         */
+        function createObjects() {
+            // 创建立方体几何体
+            const geometry = new THREE.BoxGeometry(2, 2, 2);
+            // 创建标准材质
+            const material = new THREE.MeshStandardMaterial({
+                color: 0xff6600,  // 橙色
+                roughness: 0.5,  // 粗糙度
+                metalness: 0.5  // 金属度
+            });
+
+            cube = new THREE.Mesh(geometry, material);
+            cube.position.set(0, 2, 0);
+            cube.castShadow = true;  // 投射阴影
+            cube.receiveShadow = true;  // 接收阴影
+            scene.add(cube);
+
+            // 创建球体几何体
+            const sphereGeometry = new THREE.SphereGeometry(0.5, 32, 32);
+            // 创建标准材质
+            const sphereMaterial = new THREE.MeshStandardMaterial({
+                color: 0x00ff00,  // 绿色
+                roughness: 0.3,  // 粗糙度
+                metalness: 0.7  // 金属度
+            });
+
+            // 创建第一个球体
+            const sphere1 = new THREE.Mesh(sphereGeometry, sphereMaterial);
+            sphere1.position.set(-3, 1, 0);
+            sphere1.castShadow = true;  // 投射阴影
+            sphere1.receiveShadow = true;  // 接收阴影
+            scene.add(sphere1);
+
+            // 创建第二个球体
+            const sphere2 = new THREE.Mesh(sphereGeometry, sphereMaterial.clone());
+            sphere2.material.color.set(0x0066ff);  // 蓝色
+            sphere2.position.set(3, 1, 0);
+            sphere2.castShadow = true;  // 投射阴影
+            sphere2.receiveShadow = true;  // 接收阴影
+            scene.add(sphere2);
+        }
+
+        /**
+         * 创建地面
+         * 创建接收阴影的地面和网格辅助线
+         */
+        function createFloor() {
+            // 创建平面几何体
+            const floorGeometry = new THREE.PlaneGeometry(20, 20);
+            // 创建标准材质
+            const floorMaterial = new THREE.MeshStandardMaterial({
+                color: 0x444444,  // 深灰色
+                roughness: 0.8,  // 粗糙度
+                metalness: 0.2  // 金属度
+            });
+            const floor = new THREE.Mesh(floorGeometry, floorMaterial);
+            floor.rotation.x = -Math.PI / 2;  // 旋转90度使其水平
+            floor.position.y = 0;  // 设置地面高度
+            floor.receiveShadow = true;  // 接收阴影
+            scene.add(floor);
+
+            // 创建网格辅助线
+            const gridHelper = new THREE.GridHelper(20, 20, 0x666666, 0x555555);
+            gridHelper.position.y = 0.01;  // 稍微抬高避免z-fighting
+            scene.add(gridHelper);
+        }
+
+        /**
+         * 设置控制器
+         * 为滑块和按钮添加事件监听器
+         */
+        function setupControls() {
+            const shadowTypeSelect = document.getElementById('shadowType');
+            const mapSizeSlider = document.getElementById('mapSize');
+            const biasSlider = document.getElementById('bias');
+            const normalBiasSlider = document.getElementById('normalBias');
+            const radiusSlider = document.getElementById('radius');
+            const lightXSlider = document.getElementById('lightX');
+            const lightYSlider = document.getElementById('lightY');
+            const lightZSlider = document.getElementById('lightZ');
+            const toggleHelperBtn = document.getElementById('toggleHelper');
+            const resetBtn = document.getElementById('resetShadows');
+
+            const mapSizeValue = document.getElementById('mapSizeValue');
+            const biasValue = document.getElementById('biasValue');
+            const normalBiasValue = document.getElementById('normalBiasValue');
+            const radiusValue = document.getElementById('radiusValue');
+            const lightXValue = document.getElementById('lightXValue');
+            const lightYValue = document.getElementById('lightYValue');
+            const lightZValue = document.getElementById('lightZValue');
+
+            // 阴影贴图类型选择
+            shadowTypeSelect.addEventListener('change', (e) => {
+                renderer.shadowMap.type = THREE[e.target.value];  // 更新阴影贴图类型
+            });
+
+            // 阴影贴图大小滑块
+            mapSizeSlider.addEventListener('input', (e) => {
+                const value = parseInt(e.target.value);
+                mapSizeValue.textContent = value;
+                directionalLight.shadow.mapSize.width = value;  // 更新阴影贴图宽度
+                directionalLight.shadow.mapSize.height = value;  // 更新阴影贴图高度
+                directionalLight.shadow.map?.dispose();  // 释放旧的阴影贴图
+                directionalLight.shadow.map = null;  // 清空阴影贴图引用
+            });
+
+            // 阴影偏移滑块
+            biasSlider.addEventListener('input', (e) => {
+                const value = parseFloat(e.target.value);
+                biasValue.textContent = value.toFixed(4);
+                directionalLight.shadow.bias = value;  // 更新阴影偏移
+            });
+
+            // 法线偏移滑块
+            normalBiasSlider.addEventListener('input', (e) => {
+                const value = parseFloat(e.target.value);
+                normalBiasValue.textContent = value.toFixed(2);
+                directionalLight.shadow.normalBias = value;  // 更新法线偏移
+            });
+
+            // 阴影半径滑块
+            radiusSlider.addEventListener('input', (e) => {
+                const value = parseFloat(e.target.value);
+                radiusValue.textContent = value.toFixed(1);
+                directionalLight.shadow.radius = value;  // 更新阴影半径
+            });
+
+            // 光源位置X滑块
+            lightXSlider.addEventListener('input', (e) => {
+                const value = parseFloat(e.target.value);
+                lightXValue.textContent = value.toFixed(1);
+                directionalLight.position.x = value;  // 更新光源X位置
+                shadowHelper.update();  // 更新辅助线
+            });
+
+            // 光源位置Y滑块
+            lightYSlider.addEventListener('input', (e) => {
+                const value = parseFloat(e.target.value);
+                lightYValue.textContent = value.toFixed(1);
+                directionalLight.position.y = value;  // 更新光源Y位置
+                shadowHelper.update();  // 更新辅助线
+            });
+
+            // 光源位置Z滑块
+            lightZSlider.addEventListener('input', (e) => {
+                const value = parseFloat(e.target.value);
+                lightZValue.textContent = value.toFixed(1);
+                directionalLight.position.z = value;  // 更新光源Z位置
+                shadowHelper.update();  // 更新辅助线
+            });
+
+            // 切换辅助线显示按钮
+            toggleHelperBtn.addEventListener('click', () => {
+                showHelper = !showHelper;
+                shadowHelper.visible = showHelper;  // 更新辅助线可见性
+            });
+
+            // 重置阴影参数按钮
+            resetBtn.addEventListener('click', () => {
+                renderer.shadowMap.type = THREE.PCFSoftShadowMap;  // 重置阴影类型
+                shadowTypeSelect.value = 'PCFSoftShadowMap';
+
+                directionalLight.shadow.mapSize.width = 2048;  // 重置阴影贴图大小
+                directionalLight.shadow.mapSize.height = 2048;
+                mapSizeSlider.value = 2048;
+                mapSizeValue.textContent = '2048';
+
+                directionalLight.shadow.bias = -0.0001;  // 重置阴影偏移
+                biasSlider.value = -0.0001;
+                biasValue.textContent = '-0.0001';
+
+                directionalLight.shadow.normalBias = 0.02;  // 重置法线偏移
+                normalBiasSlider.value = 0.02;
+                normalBiasValue.textContent = '0.02';
+
+                directionalLight.shadow.radius = 4;  // 重置阴影半径
+                radiusSlider.value = 4;
+                radiusValue.textContent = '4';
+
+                directionalLight.position.set(5, 10, 5);  // 重置光源位置
+                lightXSlider.value = 5;
+                lightXValue.textContent = '5';
+                lightYSlider.value = 10;
+                lightYValue.textContent = '10';
+                lightZSlider.value = 5;
+                lightZValue.textContent = '5';
+
+                shadowHelper.update();  // 更新辅助线
+            });
+        }
+
+        /**
+         * 窗口大小变化处理
+         * 更新相机和渲染器参数
+         */
+        function onWindowResize() {
+            // 更新相机宽高比
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            // 更新渲染器尺寸
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        /**
+         * 动画循环
+         * 每帧更新场景并渲染
+         */
+        function animate() {
+            requestAnimationFrame(animate);  // 请求下一帧
+
+            // 获取当前时间（秒）
+            const time = Date.now() * 0.001;
+
+            // 旋转立方体
+            cube.rotation.x = time * 0.5;
+            cube.rotation.y = time * 0.3;
+
+            // 更新控制器
+            controls.update();
+            // 渲染场景
+            renderer.render(scene, camera);
+        }
+
+        // 启动程序
+        init();
+    </script>
+</body>
+</html>

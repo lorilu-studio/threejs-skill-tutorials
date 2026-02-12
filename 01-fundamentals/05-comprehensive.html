@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>示例5：综合示例</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            overflow: hidden;
+            background-color: #000;
+        }
+        #info {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: white;
+            font-family: Arial, sans-serif;
+            font-size: 14px;
+            background-color: rgba(0, 0, 0, 0.7);
+            padding: 10px;
+            border-radius: 5px;
+            z-index: 100;
+        }
+        #controls {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            color: white;
+            font-family: Arial, sans-serif;
+            font-size: 12px;
+            background-color: rgba(0, 0, 0, 0.7);
+            padding: 10px;
+            border-radius: 5px;
+            z-index: 100;
+        }
+        .control-item {
+            margin: 5px 0;
+        }
+    </style>
+</head>
+<body>
+    <div id="info">示例5：综合示例 - 综合运用所有基础知识</div>
+    <div id="controls">
+        <div class="control-item">按空格键暂停/继续动画</div>
+        <div class="control-item">按R键重置相机位置</div>
+    </div>
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js"
+            }
+        }
+    </script>
+    <script type="module">
+        import * as THREE from 'three';
+
+        // ==================== 场景设置 ====================
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x0f0f23);
+        
+        // 添加雾化效果，让远处的物体逐渐淡出
+        scene.fog = new THREE.Fog(0x0f0f23, 10, 50);
+
+        // ==================== 相机设置 ====================
+        const camera = new THREE.PerspectiveCamera(
+            60,
+            window.innerWidth / window.innerHeight,
+            0.1,
+            1000
+        );
+        camera.position.set(0, 5, 15);
+        camera.lookAt(0, 0, 0);
+
+        // ==================== 渲染器设置 ====================
+        const renderer = new THREE.WebGLRenderer({ 
+            antialias: true,
+            alpha: true
+        });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.shadowMap.enabled = true; // 开启阴影
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        document.body.appendChild(renderer.domElement);
+
+        // ==================== 光源系统 ====================
+        // 环境光 - 提供基础照明
+        const ambientLight = new THREE.AmbientLight(0x404040, 0.5);
+        scene.add(ambientLight);
+
+        // 主光源 - 平行光，模拟太阳
+        const mainLight = new THREE.DirectionalLight(0xffffff, 1);
+        mainLight.position.set(10, 20, 10);
+        mainLight.castShadow = true;
+        mainLight.shadow.mapSize.width = 2048;
+        mainLight.shadow.mapSize.height = 2048;
+        scene.add(mainLight);
+
+        // 补光 - 蓝色点光源
+        const fillLight = new THREE.PointLight(0x4ecdc4, 0.5, 50);
+        fillLight.position.set(-10, 5, 10);
+        scene.add(fillLight);
+
+        // 轮廓光 - 红色点光源
+        const rimLight = new THREE.PointLight(0xff6b6b, 0.5, 50);
+        rimLight.position.set(10, 5, -10);
+        scene.add(rimLight);
+
+        // ==================== 辅助工具 ====================
+        // 坐标轴辅助线
+        const axesHelper = new THREE.AxesHelper(5);
+        scene.add(axesHelper);
+
+        // 网格辅助线
+        const gridHelper = new THREE.GridHelper(30, 30, 0x444444, 0x222222);
+        scene.add(gridHelper);
+
+        // ==================== 创建物体 ====================
+        const objects = [];
+
+        // 创建地面
+        const groundGeometry = new THREE.PlaneGeometry(30, 30);
+        const groundMaterial = new THREE.MeshStandardMaterial({ 
+            color: 0x2a2a4a,
+            roughness: 0.8,
+            metalness: 0.2
+        });
+        const ground = new THREE.Mesh(groundGeometry, groundMaterial);
+        ground.rotation.x = -Math.PI / 2;
+        ground.position.y = -1;
+        ground.receiveShadow = true;
+        scene.add(ground);
+        objects.push(ground);
+
+        // 创建中心立方体
+        const centerBoxGeometry = new THREE.BoxGeometry(2, 2, 2);
+        const centerBoxMaterial = new THREE.MeshStandardMaterial({ 
+            color: 0xff6b6b,
+            roughness: 0.3,
+            metalness: 0.5
+        });
+        const centerBox = new THREE.Mesh(centerBoxGeometry, centerBoxMaterial);
+        centerBox.position.y = 1;
+        centerBox.castShadow = true;
+        centerBox.receiveShadow = true;
+        scene.add(centerBox);
+        objects.push(centerBox);
+
+        // 创建环绕的球体
+        const sphereGeometry = new THREE.SphereGeometry(0.5, 32, 32);
+        const sphereColors = [0x4ecdc4, 0xffe66d, 0x95e1d3, 0xf38181];
+        const spheres = [];
+
+        for (let i = 0; i < 4; i++) {
+            const sphereMaterial = new THREE.MeshStandardMaterial({ 
+                color: sphereColors[i],
+                roughness: 0.4,
+                metalness: 0.3
+            });
+            const sphere = new THREE.Mesh(sphereGeometry, sphereMaterial);
+            sphere.castShadow = true;
+            sphere.receiveShadow = true;
+            spheres.push(sphere);
+            scene.add(sphere);
+        }
+
+        // 创建环绕的圆锥体
+        const coneGeometry = new THREE.ConeGeometry(0.4, 1, 32);
+        const coneMaterial = new THREE.MeshStandardMaterial({ 
+            color: 0xffe66d,
+            roughness: 0.5,
+            metalness: 0.4
+        });
+        const cones = [];
+
+        for (let i = 0; i < 4; i++) {
+            const cone = new THREE.Mesh(coneGeometry, coneMaterial);
+            cone.castShadow = true;
+            cone.receiveShadow = true;
+            cones.push(cone);
+            scene.add(cone);
+        }
+
+        // 创建环绕的圆环
+        const torusGeometry = new THREE.TorusGeometry(0.4, 0.15, 16, 100);
+        const torusMaterial = new THREE.MeshStandardMaterial({ 
+            color: 0x95e1d3,
+            roughness: 0.3,
+            metalness: 0.6
+        });
+        const tori = [];
+
+        for (let i = 0; i < 4; i++) {
+            const torus = new THREE.Mesh(torusGeometry, torusMaterial);
+            torus.castShadow = true;
+            torus.receiveShadow = true;
+            tori.push(torus);
+            scene.add(torus);
+        }
+
+        // ==================== 动画控制 ====================
+        let isAnimating = true;
+        let animationTime = 0;
+
+        // 键盘控制
+        document.addEventListener('keydown', (event) => {
+            if (event.code === 'Space') {
+                isAnimating = !isAnimating;
+            } else if (event.code === 'KeyR') {
+                camera.position.set(0, 5, 15);
+                camera.lookAt(0, 0, 0);
+            }
+        });
+
+        // ==================== 动画循环 ====================
+        function animate() {
+            requestAnimationFrame(animate);
+
+            if (isAnimating) {
+                animationTime += 0.01;
+
+                // 中心立方体旋转
+                centerBox.rotation.x += 0.01;
+                centerBox.rotation.y += 0.015;
+
+                // 球体环绕运动
+                spheres.forEach((sphere, index) => {
+                    const angle = animationTime + (index * Math.PI / 2);
+                    const radius = 4;
+                    sphere.position.x = Math.cos(angle) * radius;
+                    sphere.position.z = Math.sin(angle) * radius;
+                    sphere.position.y = Math.sin(animationTime * 2 + index) * 0.5 + 1;
+                    sphere.rotation.x += 0.02;
+                    sphere.rotation.y += 0.03;
+                });
+
+                // 圆锥体环绕运动（外圈）
+                cones.forEach((cone, index) => {
+                    const angle = -animationTime * 0.8 + (index * Math.PI / 2);
+                    const radius = 6;
+                    cone.position.x = Math.cos(angle) * radius;
+                    cone.position.z = Math.sin(angle) * radius;
+                    cone.position.y = Math.cos(animationTime * 1.5 + index) * 0.5 + 0.5;
+                    cone.rotation.x += 0.015;
+                    cone.rotation.y += 0.02;
+                });
+
+                // 圆环环绕运动（最外圈）
+                tori.forEach((torus, index) => {
+                    const angle = animationTime * 0.6 + (index * Math.PI / 2);
+                    const radius = 8;
+                    torus.position.x = Math.cos(angle) * radius;
+                    torus.position.z = Math.sin(angle) * radius;
+                    torus.position.y = Math.sin(animationTime * 1.2 + index) * 0.3 + 0.3;
+                    torus.rotation.x += 0.01;
+                    torus.rotation.y += 0.025;
+                });
+
+                // 相机轻微摆动
+                camera.position.x = Math.sin(animationTime * 0.2) * 2;
+                camera.position.y = 5 + Math.sin(animationTime * 0.3) * 1;
+                camera.lookAt(0, 0, 0);
+            }
+
+            // 渲染场景
+            renderer.render(scene, camera);
+        }
+
+        animate();
+
+        // ==================== 响应式窗口调整 ====================
+        function onWindowResize() {
+            const width = window.innerWidth;
+            const height = window.innerHeight;
+
+            camera.aspect = width / height;
+            camera.updateProjectionMatrix();
+
+            renderer.setSize(width, height);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        }
+
+        window.addEventListener('resize', onWindowResize);
+
+        // 初始调用
+        onWindowResize();
+    </script>
+</body>
+</html>

@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>示例4：点云和线段</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            overflow: hidden;
+            background-color: #000;
+        }
+        #info {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: white;
+            font-family: Arial, sans-serif;
+            font-size: 14px;
+            background-color: rgba(0, 0, 0, 0.7);
+            padding: 10px;
+            border-radius: 5px;
+            z-index: 100;
+        }
+    </style>
+</head>
+<body>
+    <div id="info">示例4：点云和线段 - Points、Line、LineLoop、LineSegments</div>
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js"
+            }
+        }
+    </script>
+    <script type="module">
+        import * as THREE from 'three';
+
+        // 创建场景
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x1a1a2e);
+
+        // 创建相机
+        const camera = new THREE.PerspectiveCamera(
+            75,
+            window.innerWidth / window.innerHeight,
+            0.1,
+            1000
+        );
+        camera.position.set(0, 5, 10);
+        camera.lookAt(0, 0, 0);
+
+        // 创建渲染器
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        document.body.appendChild(renderer.domElement);
+
+        // 创建网格辅助线
+        const gridHelper = new THREE.GridHelper(20, 20);
+        scene.add(gridHelper);
+
+        // 1. 创建点云（Points）
+        // 点云由大量点组成，常用于粒子效果
+        const pointCount = 2000;
+        const pointGeometry = new THREE.BufferGeometry();
+        const pointPositions = new Float32Array(pointCount * 3);
+        const pointColors = new Float32Array(pointCount * 3);
+
+        for (let i = 0; i < pointCount; i++) {
+            // 随机位置（球形分布）
+            const theta = Math.random() * Math.PI * 2;
+            const phi = Math.random() * Math.PI;
+            const radius = 2 + Math.random() * 0.5;
+
+            pointPositions[i * 3] = radius * Math.sin(phi) * Math.cos(theta);
+            pointPositions[i * 3 + 1] = radius * Math.sin(phi) * Math.sin(theta);
+            pointPositions[i * 3 + 2] = radius * Math.cos(phi);
+
+            // 随机颜色
+            pointColors[i * 3] = Math.random();
+            pointColors[i * 3 + 1] = Math.random();
+            pointColors[i * 3 + 2] = Math.random();
+        }
+
+        pointGeometry.setAttribute('position', new THREE.BufferAttribute(pointPositions, 3));
+        pointGeometry.setAttribute('color', new THREE.BufferAttribute(pointColors, 3));
+
+        const pointMaterial = new THREE.PointsMaterial({
+            size: 0.05,
+            sizeAttenuation: true,  // 点的大小随距离衰减
+            vertexColors: true,      // 使用顶点颜色
+            transparent: true,
+            opacity: 0.8
+        });
+
+        const pointCloud = new THREE.Points(pointGeometry, pointMaterial);
+        pointCloud.position.set(-3, 2, 0);
+        scene.add(pointCloud);
+
+        // 2. 创建Line（连续线段）
+        // Line将点按顺序连接成一条线
+        const linePoints = [
+            new THREE.Vector3(-2, 0, 0),
+            new THREE.Vector3(-1, 1, 0),
+            new THREE.Vector3(0, 0, 0),
+            new THREE.Vector3(1, 1, 0),
+            new THREE.Vector3(2, 0, 0)
+        ];
+
+        const lineGeometry = new THREE.BufferGeometry().setFromPoints(linePoints);
+        const lineMaterial = new THREE.LineBasicMaterial({
+            color: 0xff6b6b,
+            linewidth: 2
+        });
+
+        const line = new THREE.Line(lineGeometry, lineMaterial);
+        line.position.set(-1, 2, 0);
+        scene.add(line);
+
+        // 3. 创建LineLoop（闭合线段）
+        // LineLoop将首尾相连形成闭合形状
+        const loopPoints = [
+            new THREE.Vector3(0, 0, 0),
+            new THREE.Vector3(1, 1, 0),
+            new THREE.Vector3(2, 0, 0),
+            new THREE.Vector3(1, -1, 0)
+        ];
+
+        const loopGeometry = new THREE.BufferGeometry().setFromPoints(loopPoints);
+        const loopMaterial = new THREE.LineBasicMaterial({
+            color: 0x4ecdc4,
+            linewidth: 2
+        });
+
+        const lineLoop = new THREE.LineLoop(loopGeometry, loopMaterial);
+        lineLoop.position.set(1, 2, 0);
+        scene.add(lineLoop);
+
+        // 4. 创建LineSegments（独立线段）
+        // LineSegments每两个点组成一条独立的线段
+        const segmentsCount = 100;
+        const segmentsGeometry = new THREE.BufferGeometry();
+        const segmentsPositions = new Float32Array(segmentsCount * 6);  // 每条线段2个点，每个点3个坐标
+
+        for (let i = 0; i < segmentsCount; i++) {
+            const x1 = (Math.random() - 0.5) * 3;
+            const y1 = (Math.random() - 0.5) * 3;
+            const z1 = (Math.random() - 0.5) * 3;
+            const x2 = (Math.random() - 0.5) * 3;
+            const y2 = (Math.random() - 0.5) * 3;
+            const z2 = (Math.random() - 0.5) * 3;
+
+            segmentsPositions[i * 6] = x1;
+            segmentsPositions[i * 6 + 1] = y1;
+            segmentsPositions[i * 6 + 2] = z1;
+            segmentsPositions[i * 6 + 3] = x2;
+            segmentsPositions[i * 6 + 4] = y2;
+            segmentsPositions[i * 6 + 5] = z2;
+        }
+
+        segmentsGeometry.setAttribute('position', new THREE.BufferAttribute(segmentsPositions, 3));
+
+        const segmentsMaterial = new THREE.LineBasicMaterial({
+            color: 0xffe66d,
+            linewidth: 1,
+            transparent: true,
+            opacity: 0.6
+        });
+
+        const lineSegments = new THREE.LineSegments(segmentsGeometry, segmentsMaterial);
+        lineSegments.position.set(3, 2, 0);
+        scene.add(lineSegments);
+
+        // 5. 创建螺旋线（使用Line）
+        const spiralPoints = [];
+        for (let i = 0; i < 200; i++) {
+            const t = i / 200 * Math.PI * 4;
+            const x = Math.cos(t) * (1 + t * 0.1);
+            const y = t * 0.3 - 2;
+            const z = Math.sin(t) * (1 + t * 0.1);
+            spiralPoints.push(new THREE.Vector3(x, y, z));
+        }
+
+        const spiralGeometry = new THREE.BufferGeometry().setFromPoints(spiralPoints);
+        const spiralMaterial = new THREE.LineBasicMaterial({
+            color: 0x95e1d3,
+            linewidth: 2
+        });
+
+        const spiral = new THREE.Line(spiralGeometry, spiralMaterial);
+        spiral.position.set(0, 2, 0);
+        scene.add(spiral);
+
+        // 添加文字标签
+        const createLabel = (text, x, y, z) => {
+            const canvas = document.createElement('canvas');
+            const context = canvas.getContext('2d');
+            canvas.width = 256;
+            canvas.height = 64;
+            context.fillStyle = 'rgba(0, 0, 0, 0.7)';
+            context.fillRect(0, 0, canvas.width, canvas.height);
+            context.fillStyle = 'white';
+            context.font = '24px Arial';
+            context.textAlign = 'center';
+            context.fillText(text, canvas.width / 2, canvas.height / 2);
+            
+            const texture = new THREE.CanvasTexture(canvas);
+            const spriteMaterial = new THREE.SpriteMaterial({ map: texture });
+            const sprite = new THREE.Sprite(spriteMaterial);
+            sprite.position.set(x, y + 1.5, z);
+            sprite.scale.set(2, 0.5, 1);
+            scene.add(sprite);
+        };
+
+        createLabel('Points', -3, 2, 0);
+        createLabel('Line', -1, 2, 0);
+        createLabel('LineLoop', 1, 2, 0);
+        createLabel('LineSegments', 3, 2, 0);
+
+        // 动画循环
+        function animate() {
+            requestAnimationFrame(animate);
+
+            const time = Date.now() * 0.001;
+
+            // 旋转点云
+            pointCloud.rotation.y += 0.005;
+            pointCloud.rotation.x = Math.sin(time * 0.5) * 0.2;
+
+            // 旋转线
+            line.rotation.y = Math.sin(time) * 0.3;
+
+            // 旋转闭合线
+            lineLoop.rotation.z += 0.01;
+
+            // 旋转线段
+            lineSegments.rotation.y -= 0.003;
+            lineSegments.rotation.x += 0.002;
+
+            // 旋转螺旋线
+            spiral.rotation.y += 0.01;
+
+            renderer.render(scene, camera);
+        }
+
+        animate();
+
+        // 响应式窗口调整
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        });
+    </script>
+</body>
+</html>

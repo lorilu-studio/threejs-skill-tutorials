@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>示例1：基础场景设置</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            overflow: hidden;
+            background-color: #000;
+        }
+        #info {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: white;
+            font-family: Arial, sans-serif;
+            font-size: 14px;
+            background-color: rgba(0, 0, 0, 0.7);
+            padding: 10px;
+            border-radius: 5px;
+            z-index: 100;
+        }
+    </style>
+</head>
+<body>
+    <div id="info">示例1：基础场景设置 - 场景、相机、渲染器</div>
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js"
+            }
+        }
+    </script>
+    <script type="module">
+        import * as THREE from 'three';
+
+        // 创建场景（Scene）- 相当于一个虚拟的3D舞台
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x1a1a2e);
+
+        // 创建相机（Camera）- 相当于摄像机，决定了我们能看到什么
+        // PerspectiveCamera参数：视野角度(FOV)、宽高比、近裁剪面、远裁剪面
+        const camera = new THREE.PerspectiveCamera(
+            75,                                     // 视野角度75度，接近人眼的视野范围
+            window.innerWidth / window.innerHeight, // 宽高比，确保画面不变形
+            0.1,                                    // 近裁剪面，距离相机0.1单位以内的物体不显示
+            1000                                    // 远裁剪面，距离相机1000单位以外的物体不显示
+        );
+        camera.position.z = 5; // 将相机向后移动5个单位，以便能看到原点附近的物体
+
+        // 创建渲染器（Renderer）- 相当于画笔，将3D场景绘制到2D屏幕上
+        const renderer = new THREE.WebGLRenderer({
+            antialias: true // 开启抗锯齿，让边缘更平滑
+        });
+        renderer.setSize(window.innerWidth, window.innerHeight); // 设置渲染器尺寸为窗口大小
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); // 优化高清屏显示效果
+        document.body.appendChild(renderer.domElement); // 将渲染器的canvas添加到页面中
+
+        // 创建一个立方体作为示例
+        const geometry = new THREE.BoxGeometry(1, 1, 1); // 创建立方体几何体，边长为1
+        const material = new THREE.MeshBasicMaterial({ 
+            color: 0x00ff00,
+            wireframe: true // 线框模式，更容易看到立方体的结构
+        });
+        const cube = new THREE.Mesh(geometry, material);
+        scene.add(cube); // 将立方体添加到场景中
+
+        // 动画循环函数 - 每帧都会调用，实现动画效果
+        function animate() {
+            requestAnimationFrame(animate); // 请求下一帧动画
+
+            // 让立方体旋转起来
+            cube.rotation.x += 0.01;
+            cube.rotation.y += 0.01;
+
+            // 渲染场景 - 使用相机拍摄场景
+            renderer.render(scene, camera);
+        }
+
+        // 启动动画循环
+        animate();
+
+        // 监听窗口大小变化，实时调整渲染器尺寸
+        window.addEventListener('resize', () => {
+            // 更新相机的宽高比
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix(); // 更新相机的投影矩阵
+
+            // 更新渲染器尺寸
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        });
+    </script>
+</body>
+</html>

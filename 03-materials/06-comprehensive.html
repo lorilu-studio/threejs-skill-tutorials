@@ -1,0 +1,736 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Three.js 材质综合示例</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: Arial, sans-serif;
+        }
+        #info {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 15px;
+            border-radius: 8px;
+            font-size: 14px;
+            max-width: 400px;
+        }
+        #info h2 {
+            margin: 0 0 10px 0;
+            font-size: 18px;
+            color: #4CAF50;
+        }
+        #info p {
+            margin: 5px 0;
+            line-height: 1.5;
+        }
+        #controls {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 15px;
+            border-radius: 8px;
+            font-size: 14px;
+            width: 280px;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+        #controls h3 {
+            margin: 0 0 10px 0;
+            font-size: 16px;
+            color: #4CAF50;
+        }
+        .control-group {
+            margin-bottom: 10px;
+        }
+        .control-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-size: 12px;
+        }
+        .control-group input[type="range"] {
+            width: 100%;
+        }
+        .control-group button {
+            width: 100%;
+            padding: 8px;
+            margin-top: 5px;
+            background: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        .control-group button:hover {
+            background: #45a049;
+        }
+        #instructions {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 15px;
+            border-radius: 8px;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div id="info">
+        <h2>材质综合示例</h2>
+        <p>展示多种材质类型的综合应用</p>
+        <p>场景包含：</p>
+        <p>• 中心：玻璃球体（透射材质）</p>
+        <p>• 环绕：金属球体（PBR材质）</p>
+        <p>• 地面：砖块纹理（纹理材质）</p>
+        <p>• 浮动：着色器球体（自定义着色器）</p>
+        <p>• 线框：法线材质（调试材质）</p>
+    </div>
+
+    <div id="controls">
+        <h3>场景控制</h3>
+        <div class="control-group">
+            <label>动画速度 (Animation Speed): <span id="animSpeedValue">1.0</span></label>
+            <input type="range" id="animSpeed" min="0" max="3" step="0.1" value="1.0">
+        </div>
+        <div class="control-group">
+            <label>玻璃透射率 (Glass Transmission): <span id="glassTransmissionValue">0.9</span></label>
+            <input type="range" id="glassTransmission" min="0" max="1" step="0.01" value="0.9">
+        </div>
+        <div class="control-group">
+            <label>金属粗糙度 (Metal Roughness): <span id="metalRoughnessValue">0.3</span></label>
+            <input type="range" id="metalRoughness" min="0" max="1" step="0.01" value="0.3">
+        </div>
+        <div class="control-group">
+            <label>着色器强度 (Shader Intensity): <span id="shaderIntensityValue">1.0</span></label>
+            <input type="range" id="shaderIntensity" min="0" max="2" step="0.1" value="1.0">
+        </div>
+        <div class="control-group">
+            <button id="toggleWireframe">切换线框模式</button>
+        </div>
+        <div class="control-group">
+            <button id="toggleAnimation">暂停/继续动画</button>
+        </div>
+        <div class="control-group">
+            <button id="resetCamera">重置相机</button>
+        </div>
+    </div>
+
+    <div id="instructions">
+        <strong>操作说明：</strong><br>
+        • 鼠标左键拖拽：旋转视角<br>
+        • 鼠标右键拖拽：平移视角<br>
+        • 鼠标滚轮：缩放视角<br>
+        • 空格键：暂停/继续动画
+    </div>
+
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+
+    <script type="module">
+        // 导入Three.js核心库和轨道控制器
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        // 全局变量声明
+        let scene, camera, renderer, controls;  // 场景、相机、渲染器、控制器
+        let clock = new THREE.Clock();  // 时钟对象，用于计算时间增量
+        let objects = [];  // 存储所有场景对象
+        let isAnimating = true;  // 动画状态标志
+        let wireframeMode = false;  // 线框模式标志
+
+        /**
+         * 初始化函数
+         * 创建场景、相机、渲染器等基础组件
+         */
+        function init() {
+            // 创建容器div并添加到body
+            const container = document.createElement('div');
+            document.body.appendChild(container);
+
+            // 创建场景对象
+            scene = new THREE.Scene();
+            // 设置场景背景颜色为深蓝色
+            scene.background = new THREE.Color(0x1a1a2e);
+            // 添加雾效 - 创建深度感
+            // 参数: 雾的颜色, 近距离(10), 远距离(50)
+            scene.fog = new THREE.Fog(0x1a1a2e, 10, 50);
+
+            // 创建透视相机
+            // 参数: 视野角度(60度), 宽高比, 近裁剪面(0.1), 远裁剪面(1000)
+            camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+            // 设置相机位置
+            camera.position.set(0, 8, 15);
+
+            // 创建WebGL渲染器
+            renderer = new THREE.WebGLRenderer({ antialias: true });  // 开启抗锯齿
+            renderer.setSize(window.innerWidth, window.innerHeight);  // 设置渲染尺寸
+            renderer.setPixelRatio(window.devicePixelRatio);  // 设置像素比，适配高清屏
+            renderer.shadowMap.enabled = true;  // 启用阴影映射
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;  // 使用柔和阴影
+            renderer.toneMapping = THREE.ACESFilmicToneMapping;  // 使用ACES电影级色调映射
+            renderer.toneMappingExposure = 1.0;  // 设置曝光度
+            container.appendChild(renderer.domElement);  // 将渲染器添加到容器
+
+            // 创建轨道控制器
+            controls = new OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;  // 启用阻尼效果，使旋转更平滑
+            controls.dampingFactor = 0.05;  // 阻尼系数
+            controls.maxPolarAngle = Math.PI / 2;  // 限制垂直旋转角度，防止看到地面下方
+
+            // 添加光源
+            addLights();
+            // 创建环境光照
+            createEnvironment();
+            // 创建场景对象
+            createScene();
+            // 设置控制器
+            setupControls();
+            // 设置键盘控制
+            setupKeyboardControls();
+
+            // 监听窗口大小变化
+            window.addEventListener('resize', onWindowResize);
+            // 开始动画循环
+            animate();
+        }
+
+        /**
+         * 添加光源
+         * 创建环境光、平行光和多个彩色点光源
+         */
+        function addLights() {
+            // 创建环境光 - 提供基础照明
+            const ambientLight = new THREE.AmbientLight(0x404040, 0.4);
+            scene.add(ambientLight);
+
+            // 创建平行光 - 模拟太阳光，可投射阴影
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
+            directionalLight.position.set(5, 15, 10);  // 设置光源位置
+            directionalLight.castShadow = true;  // 启用阴影投射
+            directionalLight.shadow.mapSize.width = 2048;  // 阴影贴图宽度
+            directionalLight.shadow.mapSize.height = 2048;  // 阴影贴图高度
+            directionalLight.shadow.camera.near = 0.5;  // 阴影相机近裁剪面
+            directionalLight.shadow.camera.far = 50;  // 阴影相机远裁剪面
+            scene.add(directionalLight);
+
+            // 创建橙色点光源 - 增加场景色彩
+            const pointLight1 = new THREE.PointLight(0xff6600, 3, 30);
+            pointLight1.position.set(-8, 5, 8);  // 设置光源位置
+            pointLight1.castShadow = true;  // 启用阴影投射
+            scene.add(pointLight1);
+
+            // 创建蓝色点光源 - 增加场景色彩
+            const pointLight2 = new THREE.PointLight(0x0066ff, 3, 30);
+            pointLight2.position.set(8, 5, -8);  // 设置光源位置
+            pointLight2.castShadow = true;  // 启用阴影投射
+            scene.add(pointLight2);
+
+            // 创建紫色点光源 - 增加场景色彩
+            const pointLight3 = new THREE.PointLight(0xff00ff, 2, 30);
+            pointLight3.position.set(0, 10, 0);  // 设置光源位置
+            scene.add(pointLight3);
+        }
+
+        /**
+         * 创建环境光照
+         * 使用PMREM生成器创建环境贴图
+         */
+        function createEnvironment() {
+            // 创建PMREM生成器 - 用于预过滤环境贴图
+            const pmremGenerator = new THREE.PMREMGenerator(renderer);
+            pmremGenerator.compileEquirectangularShader();  // 编译着色器
+
+            // 创建临时场景用于生成环境贴图
+            const sceneEnv = new THREE.Scene();
+            sceneEnv.background = new THREE.Color(0x888888);  // 灰色环境
+
+            // 从场景生成环境贴图
+            const envTexture = pmremGenerator.fromScene(sceneEnv).texture;
+            scene.environment = envTexture;  // 设置场景环境贴图
+            scene.background = envTexture;  // 设置场景背景
+
+            // 清理PMREM生成器资源
+            pmremGenerator.dispose();
+        }
+
+        /**
+         * 创建场景
+         * 创建所有场景对象
+         */
+        function createScene() {
+            createFloor();  // 创建地面
+            createCentralGlass();  // 创建中心玻璃球
+            createOrbitingMetals();  // 创建环绕的金属球
+            createFloatingShaders();  // 创建浮动的着色器球
+            createWireframeObjects();  // 创建线框对象
+            createDecorations();  // 创建装饰粒子
+        }
+
+        /**
+         * 创建地面
+         * 创建接收阴影的地面和网格辅助线
+         */
+        function createFloor() {
+            // 创建平面几何体 - 使用高分段数以获得更好的阴影效果
+            const floorGeometry = new THREE.PlaneGeometry(30, 30, 20, 20);
+            // 创建标准材质
+            const floorMaterial = new THREE.MeshStandardMaterial({
+                color: 0x444444,  // 深灰色
+                roughness: 0.8,  // 粗糙度
+                metalness: 0.2  // 金属度
+            });
+            const floor = new THREE.Mesh(floorGeometry, floorMaterial);
+            floor.rotation.x = -Math.PI / 2;  // 旋转90度使其水平
+            floor.position.y = -2;  // 设置地面高度
+            floor.receiveShadow = true;  // 接收阴影
+            scene.add(floor);
+            objects.push({ mesh: floor, type: 'floor' });
+
+            // 创建网格辅助线
+            const gridHelper = new THREE.GridHelper(30, 30, 0x666666, 0x555555);
+            gridHelper.position.y = -1.99;  // 稍微抬高避免z-fighting
+            scene.add(gridHelper);
+        }
+
+        /**
+         * 创建中心玻璃球
+         * 使用MeshPhysicalMaterial实现玻璃透射效果
+         */
+        function createCentralGlass() {
+            // 创建球体几何体 - 使用高分段数以获得更平滑的表面
+            const geometry = new THREE.SphereGeometry(1.5, 64, 64);
+            // 创建物理材质 - 实现玻璃效果
+            const material = new THREE.MeshPhysicalMaterial({
+                color: 0xffffff,  // 基础颜色
+                roughness: 0,  // 粗糙度为0，完全光滑
+                metalness: 0,  // 金属度为0，非金属
+                transmission: 0.9,  // 透射率 - 控制玻璃的透明度
+                thickness: 1.0,  // 厚度 - 影响折射效果
+                ior: 1.5,  // 折射率 - 玻璃的折射率
+                clearcoat: 1.0,  // 清漆层强度
+                clearcoatRoughness: 0.1  // 清漆层粗糙度
+            });
+            const glassSphere = new THREE.Mesh(geometry, material);
+            glassSphere.position.set(0, 0, 0);
+            glassSphere.castShadow = true;  // 投射阴影
+            glassSphere.receiveShadow = true;  // 接收阴影
+            scene.add(glassSphere);
+            objects.push({ mesh: glassSphere, type: 'glass', material: material });
+
+            // 创建内部发光球体 - 增加玻璃球的视觉效果
+            const innerGeometry = new THREE.IcosahedronGeometry(0.8, 1);
+            const innerMaterial = new THREE.MeshStandardMaterial({
+                color: 0xff0066,  // 粉红色
+                roughness: 0.3,  // 粗糙度
+                metalness: 0.8,  // 金属度
+                emissive: 0xff0066,  // 自发光颜色
+                emissiveIntensity: 0.2  // 自发光强度
+            });
+            const innerSphere = new THREE.Mesh(innerGeometry, innerMaterial);
+            innerSphere.position.set(0, 0, 0);
+            scene.add(innerSphere);
+            objects.push({ mesh: innerSphere, type: 'inner', material: innerMaterial });
+        }
+
+        /**
+         * 创建环绕的金属球
+         * 使用MeshStandardMaterial实现金属PBR效果
+         */
+        function createOrbitingMetals() {
+            // 定义6种金属颜色
+            const metalColors = [0xff0000, 0x00ff00, 0x0000ff, 0xffff00, 0xff00ff, 0x00ffff];
+            const radius = 5;  // 轨道半径
+
+            // 为每种颜色创建一个金属球
+            metalColors.forEach((color, index) => {
+                // 创建球体几何体
+                const geometry = new THREE.SphereGeometry(0.5, 32, 32);
+                // 创建标准材质 - 实现金属效果
+                const material = new THREE.MeshStandardMaterial({
+                    color: color,  // 金属颜色
+                    roughness: 0.3,  // 粗糙度 - 较低使表面更光滑
+                    metalness: 1.0  // 金属度 - 1.0表示完全金属
+                });
+                const sphere = new THREE.Mesh(geometry, material);
+                sphere.castShadow = true;  // 投射阴影
+                sphere.receiveShadow = true;  // 接收阴影
+                scene.add(sphere);
+                objects.push({
+                    mesh: sphere,
+                    type: 'metal',
+                    material: material,
+                    angle: (index / metalColors.length) * Math.PI * 2,  // 初始角度
+                    radius: radius,  // 轨道半径
+                    speed: 0.5 + index * 0.1  // 轨道速度 - 每个球体速度不同
+                });
+            });
+        }
+
+        /**
+         * 创建浮动的着色器球
+         * 使用ShaderMaterial实现自定义着色器效果
+         */
+        function createFloatingShaders() {
+            // 创建着色器材质 - 实现动态波动效果
+            const shaderMaterial = new THREE.ShaderMaterial({
+                uniforms: {
+                    time: { value: 0 },  // 时间变量，用于动画
+                    colorIntensity: { value: 1.0 }  // 颜色强度
+                },
+                // 顶点着色器 - 处理顶点位置和属性
+                vertexShader: `
+                    uniform float time;  // 时间
+                    varying vec2 vUv;  // UV坐标
+                    varying vec3 vNormal;  // 法线向量
+                    varying vec3 vPosition;  // 顶点位置
+
+                    void main() {
+                        vUv = uv;
+                        vNormal = normal;
+                        vPosition = position;
+
+                        // 创建顶点位置的副本
+                        vec3 pos = position;
+
+                        // 沿法线方向添加波动效果
+                        pos += normal * sin(pos.x * 5.0 + time) * 0.1;
+                        pos += normal * sin(pos.y * 5.0 + time * 1.2) * 0.1;
+                        pos += normal * sin(pos.z * 5.0 + time * 1.5) * 0.1;
+
+                        // 计算最终的顶点位置
+                        gl_Position = projectionMatrix * modelViewMatrix * vec4(pos, 1.0);
+                    }
+                `,
+                // 片段着色器 - 处理像素颜色
+                fragmentShader: `
+                    uniform float time;  // 时间
+                    uniform float colorIntensity;  // 颜色强度
+                    varying vec2 vUv;  // UV坐标
+                    varying vec3 vNormal;  // 法线向量
+                    varying vec3 vPosition;  // 顶点位置
+
+                    void main() {
+                        // 计算法线与视角的点积，用于光照强度
+                        float intensity = dot(vNormal, vec3(0.0, 0.0, 1.0));
+
+                        // 定义两种基础颜色
+                        vec3 color1 = vec3(1.0, 0.5, 0.0);  // 橙色
+                        vec3 color2 = vec3(0.0, 1.0, 0.5);  // 青绿色
+
+                        // 基于Y位置和时间计算混合因子
+                        float t = sin(vPosition.y * 3.0 + time) * 0.5 + 0.5;
+
+                        // 使用mix函数在颜色之间进行线性插值
+                        vec3 color = mix(color1, color2, t);
+
+                        // 根据光照强度调整颜色
+                        color *= (0.5 + 0.5 * intensity);
+
+                        // 应用颜色强度
+                        color *= colorIntensity;
+
+                        // 输出最终颜色，透明度为0.8
+                        gl_FragColor = vec4(color, 0.8);
+                    }
+                `,
+                side: THREE.DoubleSide,  // 双面渲染
+                transparent: true,  // 启用透明度
+                blending: THREE.AdditiveBlending  // 使用加法混合模式
+            });
+
+            // 创建4个浮动着色器球体
+            for (let i = 0; i < 4; i++) {
+                // 创建圆环结几何体
+                const geometry = new THREE.TorusKnotGeometry(0.4, 0.15, 64, 8);
+                const torusKnot = new THREE.Mesh(geometry, shaderMaterial.clone());
+                // 随机位置
+                torusKnot.position.set(
+                    (Math.random() - 0.5) * 12,
+                    3 + Math.random() * 3,
+                    (Math.random() - 0.5) * 12
+                );
+                torusKnot.castShadow = true;  // 投射阴影
+                scene.add(torusKnot);
+                objects.push({
+                    mesh: torusKnot,
+                    type: 'shader',
+                    material: torusKnot.material,
+                    baseY: torusKnot.position.y,  // 基础高度
+                    phase: Math.random() * Math.PI * 2  // 相位差
+                });
+            }
+        }
+
+        /**
+         * 创建线框对象
+         * 使用MeshNormalMaterial实现法线可视化
+         */
+        function createWireframeObjects() {
+            // 创建立方体几何体
+            const geometry = new THREE.BoxGeometry(0.8, 0.8, 0.8);
+            // 创建法线材质 - 根据法线方向显示颜色
+            const material = new THREE.MeshNormalMaterial({
+                wireframe: true,  // 线框模式
+                transparent: true,  // 启用透明度
+                opacity: 0.5  // 透明度
+            });
+
+            // 创建6个线框立方体
+            for (let i = 0; i < 6; i++) {
+                const cube = new THREE.Mesh(geometry, material.clone());
+                // 随机位置
+                cube.position.set(
+                    (Math.random() - 0.5) * 10,
+                    1 + Math.random() * 2,
+                    (Math.random() - 0.5) * 10
+                );
+                scene.add(cube);
+                objects.push({
+                    mesh: cube,
+                    type: 'wireframe',
+                    material: cube.material,
+                    rotationSpeed: {  // 旋转速度
+                        x: (Math.random() - 0.5) * 2,
+                        y: (Math.random() - 0.5) * 2,
+                        z: (Math.random() - 0.5) * 2
+                    }
+                });
+            }
+        }
+
+        /**
+         * 创建装饰粒子
+         * 使用PointsMaterial创建粒子系统
+         */
+        function createDecorations() {
+            const particleCount = 200;  // 粒子数量
+            const geometry = new THREE.BufferGeometry();  // 创建缓冲几何体
+            const positions = new Float32Array(particleCount * 3);  // 位置数组
+            const colors = new Float32Array(particleCount * 3);  // 颜色数组
+
+            // 为每个粒子生成随机位置和颜色
+            for (let i = 0; i < particleCount; i++) {
+                // 随机位置
+                positions[i * 3] = (Math.random() - 0.5) * 20;  // X
+                positions[i * 3 + 1] = Math.random() * 10;  // Y
+                positions[i * 3 + 2] = (Math.random() - 0.5) * 20;  // Z
+
+                // 随机颜色
+                colors[i * 3] = Math.random();  // R
+                colors[i * 3 + 1] = Math.random();  // G
+                colors[i * 3 + 2] = Math.random();  // B
+            }
+
+            // 设置位置属性
+            geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            // 设置颜色属性
+            geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+
+            // 创建粒子材质
+            const material = new THREE.PointsMaterial({
+                size: 0.1,  // 粒子大小
+                vertexColors: true,  // 启用顶点颜色
+                transparent: true,  // 启用透明度
+                opacity: 0.8,  // 透明度
+                sizeAttenuation: true  // 启用大小衰减 - 远处的粒子更小
+            });
+
+            // 创建粒子系统
+            const particles = new THREE.Points(geometry, material);
+            scene.add(particles);
+            objects.push({ mesh: particles, type: 'particles', material: material });
+        }
+
+        /**
+         * 设置控制器
+         * 为滑块和按钮添加事件监听器
+         */
+        function setupControls() {
+            const animSpeedSlider = document.getElementById('animSpeed');
+            const glassTransmissionSlider = document.getElementById('glassTransmission');
+            const metalRoughnessSlider = document.getElementById('metalRoughness');
+            const shaderIntensitySlider = document.getElementById('shaderIntensity');
+            const toggleWireframeBtn = document.getElementById('toggleWireframe');
+            const toggleAnimationBtn = document.getElementById('toggleAnimation');
+            const resetCameraBtn = document.getElementById('resetCamera');
+
+            const animSpeedValue = document.getElementById('animSpeedValue');
+            const glassTransmissionValue = document.getElementById('glassTransmissionValue');
+            const metalRoughnessValue = document.getElementById('metalRoughnessValue');
+            const shaderIntensityValue = document.getElementById('shaderIntensityValue');
+
+            // 动画速度滑块
+            animSpeedSlider.addEventListener('input', (e) => {
+                const value = parseFloat(e.target.value);
+                animSpeedValue.textContent = value.toFixed(1);
+            });
+
+            // 玻璃透射率滑块 - 更新玻璃材质的透射率
+            glassTransmissionSlider.addEventListener('input', (e) => {
+                const value = parseFloat(e.target.value);
+                glassTransmissionValue.textContent = value.toFixed(2);
+                objects.forEach(obj => {
+                    if (obj.type === 'glass') {
+                        obj.material.transmission = value;
+                    }
+                });
+            });
+
+            // 金属粗糙度滑块 - 更新金属材质的粗糙度
+            metalRoughnessSlider.addEventListener('input', (e) => {
+                const value = parseFloat(e.target.value);
+                metalRoughnessValue.textContent = value.toFixed(2);
+                objects.forEach(obj => {
+                    if (obj.type === 'metal') {
+                        obj.material.roughness = value;
+                    }
+                });
+            });
+
+            // 着色器强度滑块 - 更新着色器材质的颜色强度
+            shaderIntensitySlider.addEventListener('input', (e) => {
+                const value = parseFloat(e.target.value);
+                shaderIntensityValue.textContent = value.toFixed(1);
+                objects.forEach(obj => {
+                    if (obj.type === 'shader' && obj.material.uniforms.colorIntensity) {
+                        obj.material.uniforms.colorIntensity.value = value;
+                    }
+                });
+            });
+
+            // 切换线框模式按钮
+            toggleWireframeBtn.addEventListener('click', () => {
+                wireframeMode = !wireframeMode;
+                objects.forEach(obj => {
+                    if (obj.material && obj.material.wireframe !== undefined) {
+                        obj.material.wireframe = wireframeMode;
+                    }
+                });
+            });
+
+            // 暂停/继续动画按钮
+            toggleAnimationBtn.addEventListener('click', () => {
+                isAnimating = !isAnimating;
+            });
+
+            // 重置相机按钮
+            resetCameraBtn.addEventListener('click', () => {
+                camera.position.set(0, 8, 15);
+                controls.target.set(0, 0, 0);
+                controls.update();
+            });
+        }
+
+        /**
+         * 设置键盘控制
+         * 监听键盘事件
+         */
+        function setupKeyboardControls() {
+            window.addEventListener('keydown', (e) => {
+                // 空格键 - 暂停/继续动画
+                if (e.code === 'Space') {
+                    e.preventDefault();
+                    isAnimating = !isAnimating;
+                }
+            });
+        }
+
+        /**
+         * 窗口大小变化处理
+         * 更新相机和渲染器参数
+         */
+        function onWindowResize() {
+            // 更新相机宽高比
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            // 更新渲染器尺寸
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        /**
+         * 动画循环
+         * 每帧更新场景并渲染
+         */
+        function animate() {
+            requestAnimationFrame(animate);  // 请求下一帧
+
+            // 获取经过的时间（秒）
+            const time = clock.getElapsedTime();
+            // 获取动画速度
+            const animSpeed = parseFloat(document.getElementById('animSpeed').value);
+
+            // 如果动画处于播放状态，更新所有对象
+            if (isAnimating) {
+                objects.forEach(obj => {
+                    // 更新金属球 - 轨道运动
+                    if (obj.type === 'metal') {
+                        // 更新角度
+                        obj.angle += obj.speed * 0.01 * animSpeed;
+                        // 计算新位置
+                        obj.mesh.position.x = Math.cos(obj.angle) * obj.radius;
+                        obj.mesh.position.z = Math.sin(obj.angle) * obj.radius;
+                        // 旋转球体
+                        obj.mesh.rotation.y = time * 0.5;
+                    }
+
+                    // 更新着色器球 - 浮动和波动
+                    if (obj.type === 'shader') {
+                        // 上下浮动
+                        obj.mesh.position.y = obj.baseY + Math.sin(time * animSpeed + obj.phase) * 0.5;
+                        // 旋转
+                        obj.mesh.rotation.x = time * 0.3;
+                        obj.mesh.rotation.y = time * 0.5;
+                        // 更新着色器的time uniform
+                        if (obj.mesh.material.uniforms.time) {
+                            obj.mesh.material.uniforms.time.value = time * animSpeed;
+                        }
+                    }
+
+                    // 更新线框立方体 - 旋转
+                    if (obj.type === 'wireframe') {
+                        obj.mesh.rotation.x += obj.rotationSpeed.x * 0.01 * animSpeed;
+                        obj.mesh.rotation.y += obj.rotationSpeed.y * 0.01 * animSpeed;
+                        obj.mesh.rotation.z += obj.rotationSpeed.z * 0.01 * animSpeed;
+                    }
+
+                    // 更新粒子 - 缓慢旋转
+                    if (obj.type === 'particles') {
+                        obj.mesh.rotation.y = time * 0.1;
+                    }
+
+                    // 更新内部发光球 - 脉冲效果
+                    if (obj.type === 'inner') {
+                        const scale = 1 + Math.sin(time * 2) * 0.1;
+                        obj.mesh.scale.set(scale, scale, scale);
+                    }
+                });
+            }
+
+            // 更新控制器
+            controls.update();
+            // 渲染场景
+            renderer.render(scene, camera);
+        }
+
+        // 启动程序
+        init();
+    </script>
+</body>
+</html>

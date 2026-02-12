@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Three.js 基础材质示例</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: Arial, sans-serif;
+        }
+        #info {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 15px;
+            border-radius: 8px;
+            font-size: 14px;
+            max-width: 300px;
+        }
+        #info h2 {
+            margin: 0 0 10px 0;
+            font-size: 18px;
+            color: #4CAF50;
+        }
+        #info p {
+            margin: 5px 0;
+            line-height: 1.5;
+        }
+        .material-label {
+            position: absolute;
+            color: white;
+            font-size: 12px;
+            background: rgba(0, 0, 0, 0.5);
+            padding: 2px 6px;
+            border-radius: 4px;
+            pointer-events: none;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div id="info">
+        <h2>基础材质示例</h2>
+        <p>展示Three.js基础材质类型</p>
+        <p>从左到右：</p>
+        <p>1. MeshBasicMaterial - 无光照</p>
+        <p>2. MeshLambertMaterial - 漫反射</p>
+        <p>3. MeshPhongMaterial - 高光</p>
+        <p>4. MeshNormalMaterial - 法线</p>
+        <p>5. MeshDepthMaterial - 深度</p>
+    </div>
+
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+
+    <script type="module">
+        // 导入Three.js核心库和轨道控制器
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        // 全局变量声明
+        let scene, camera, renderer, controls;  // 场景、相机、渲染器、控制器
+        let spheres = [];  // 存储所有球体网格对象
+
+        /**
+         * 初始化函数
+         * 创建场景、相机、渲染器等基础组件
+         */
+        function init() {
+            // 创建容器div并添加到body
+            const container = document.createElement('div');
+            document.body.appendChild(container);
+
+            // 创建场景对象
+            scene = new THREE.Scene();
+            // 设置场景背景颜色为深灰色
+            scene.background = new THREE.Color(0x222222);
+
+            // 创建透视相机
+            // 参数: 视野角度(60度), 宽高比, 近裁剪面(0.1), 远裁剪面(1000)
+            camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+            // 设置相机位置
+            camera.position.set(0, 3, 8);
+
+            // 创建WebGL渲染器
+            renderer = new THREE.WebGLRenderer({ antialias: true });  // 开启抗锯齿
+            renderer.setSize(window.innerWidth, window.innerHeight);  // 设置渲染尺寸
+            renderer.setPixelRatio(window.devicePixelRatio);  // 设置像素比，适配高清屏
+            renderer.shadowMap.enabled = true;  // 启用阴影映射
+            container.appendChild(renderer.domElement);  // 将渲染器添加到容器
+
+            // 创建轨道控制器
+            controls = new OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;  // 启用阻尼效果，使旋转更平滑
+            controls.dampingFactor = 0.05;  // 阻尼系数
+
+            // 添加光源
+            addLights();
+            // 创建材质球体
+            createMaterials();
+            // 创建地面
+            createFloor();
+            // 创建标签
+            createLabels();
+
+            // 监听窗口大小变化
+            window.addEventListener('resize', onWindowResize);
+            // 开始动画循环
+            animate();
+        }
+
+        /**
+         * 添加光源
+         * 创建环境光、平行光和点光源
+         */
+        function addLights() {
+            // 创建环境光 - 提供基础照明，无方向性
+            const ambientLight = new THREE.AmbientLight(0x404040, 0.5);
+            scene.add(ambientLight);
+
+            // 创建平行光 - 模拟太阳光，可投射阴影
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
+            directionalLight.position.set(5, 10, 7);  // 设置光源位置
+            directionalLight.castShadow = true;  // 启用阴影投射
+            directionalLight.shadow.mapSize.width = 1024;  // 阴影贴图宽度
+            directionalLight.shadow.mapSize.height = 1024;  // 阴影贴图高度
+            scene.add(directionalLight);
+
+            // 创建点光源 - 从一点向四周发光
+            const pointLight = new THREE.PointLight(0xff6600, 0.5);
+            pointLight.position.set(-5, 5, 5);  // 设置光源位置
+            scene.add(pointLight);
+        }
+
+        /**
+         * 创建材质球体
+         * 展示5种基础材质类型
+         */
+        function createMaterials() {
+            // 创建球体几何体
+            // 参数: 半径(0.6), 水平分段数(32), 垂直分段数(32)
+            const geometry = new THREE.SphereGeometry(0.6, 32, 32);
+
+            // 定义5种材质及其配置
+            const materials = [
+                {
+                    name: 'MeshBasicMaterial',
+                    // MeshBasicMaterial - 不受光照影响的基础材质
+                    material: new THREE.MeshBasicMaterial({
+                        color: 0xff0000,  // 红色
+                        wireframe: false  // 不使用线框模式
+                    }),
+                    position: { x: -4, y: 1, z: 0 }
+                },
+                {
+                    name: 'MeshLambertMaterial',
+                    // MeshLambertMaterial - 漫反射材质，适合非金属表面
+                    material: new THREE.MeshLambertMaterial({
+                        color: 0x00ff00,  // 绿色
+                        emissive: 0x111111,  // 自发光颜色
+                        emissiveIntensity: 0.5  // 自发光强度
+                    }),
+                    position: { x: -2, y: 1, z: 0 }
+                },
+                {
+                    name: 'MeshPhongMaterial',
+                    // MeshPhongMaterial - 高光材质，适合光滑表面
+                    material: new THREE.MeshPhongMaterial({
+                        color: 0x0000ff,  // 蓝色
+                        specular: 0xffffff,  // 高光颜色
+                        shininess: 100  // 高光强度
+                    }),
+                    position: { x: 0, y: 1, z: 0 }
+                },
+                {
+                    name: 'MeshNormalMaterial',
+                    // MeshNormalMaterial - 法线材质，根据法线方向显示颜色
+                    material: new THREE.MeshNormalMaterial({
+                        flatShading: false  // 使用平滑着色
+                    }),
+                    position: { x: 2, y: 1, z: 0 }
+                },
+                {
+                    name: 'MeshDepthMaterial',
+                    // MeshDepthMaterial - 深度材质，根据距离显示颜色
+                    material: new THREE.MeshDepthMaterial({
+                        depthPacking: THREE.RGBADepthPacking  // 深度打包方式
+                    }),
+                    position: { x: 4, y: 1, z: 0 }
+                }
+            ];
+
+            // 遍历材质数组，创建球体网格
+            materials.forEach((item, index) => {
+                const sphere = new THREE.Mesh(geometry, item.material);
+                sphere.position.set(item.position.x, item.position.y, item.position.z);
+                sphere.castShadow = true;  // 投射阴影
+                sphere.receiveShadow = true;  // 接收阴影
+                sphere.userData.name = item.name;  // 存储材质名称
+                scene.add(sphere);
+                spheres.push(sphere);  // 添加到球体数组
+            });
+        }
+
+        /**
+         * 创建地面
+         * 创建接收阴影的地面和网格辅助线
+         */
+        function createFloor() {
+            // 创建平面几何体
+            const floorGeometry = new THREE.PlaneGeometry(20, 20);
+            // 创建标准材质
+            const floorMaterial = new THREE.MeshStandardMaterial({
+                color: 0x444444,  // 深灰色
+                roughness: 0.8,  // 粗糙度
+                metalness: 0.2  // 金属度
+            });
+            const floor = new THREE.Mesh(floorGeometry, floorMaterial);
+            floor.rotation.x = -Math.PI / 2;  // 旋转90度使其水平
+            floor.position.y = 0;  // 设置地面高度
+            floor.receiveShadow = true;  // 接收阴影
+            scene.add(floor);
+
+            // 创建网格辅助线
+            const gridHelper = new THREE.GridHelper(20, 20, 0x666666, 0x555555);
+            gridHelper.position.y = 0.01;  // 稍微抬高避免z-fighting
+            scene.add(gridHelper);
+        }
+
+        /**
+         * 创建标签
+         * 为每个球体创建HTML标签显示材质名称
+         */
+        function createLabels() {
+            // 定义标签内容
+            const labels = [
+                { text: 'Basic\n无光照', position: { x: -4, y: 2.5, z: 0 } },
+                { text: 'Lambert\n漫反射', position: { x: -2, y: 2.5, z: 0 } },
+                { text: 'Phong\n高光', position: { x: 0, y: 2.5, z: 0 } },
+                { text: 'Normal\n法线', position: { x: 2, y: 2.5, z: 0 } },
+                { text: 'Depth\n深度', position: { x: 4, y: 2.5, z: 0 } }
+            ];
+
+            // 为每个标签创建div元素
+            labels.forEach(label => {
+                const div = document.createElement('div');
+                div.className = 'material-label';
+                div.innerHTML = label.text;
+                div.style.left = '50%';
+                div.style.top = '50%';
+                div.style.transform = 'translate(-50%, -50%)';
+                div.style.whiteSpace = 'pre-line';  // 保留换行符
+                div.style.textAlign = 'center';
+                div.style.lineHeight = '1.3';
+                document.body.appendChild(div);
+                label.element = div;  // 保存div引用
+            });
+
+            // 将标签数组存储到window对象，便于后续更新
+            window.materialLabels = labels;
+        }
+
+        /**
+         * 更新标签位置
+         * 将3D坐标转换为2D屏幕坐标
+         */
+        function updateLabels() {
+            if (!window.materialLabels) return;
+
+            // 遍历所有标签
+            window.materialLabels.forEach(label => {
+                // 将3D位置转换为向量
+                const vector = new THREE.Vector3(label.position.x, label.position.y, label.position.z);
+                // 投影到标准化设备坐标(NDC)
+                vector.project(camera);
+
+                // 将NDC坐标转换为屏幕像素坐标
+                const x = (vector.x * 0.5 + 0.5) * window.innerWidth;
+                const y = (-(vector.y * 0.5) + 0.5) * window.innerHeight;
+
+                // 只显示在相机视野内的标签
+                if (vector.z < 1) {
+                    label.element.style.display = 'block';
+                    label.element.style.left = `${x}px`;
+                    label.element.style.top = `${y}px`;
+                } else {
+                    label.element.style.display = 'none';
+                }
+            });
+        }
+
+        /**
+         * 窗口大小变化处理
+         * 更新相机和渲染器参数
+         */
+        function onWindowResize() {
+            // 更新相机宽高比
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            // 更新渲染器尺寸
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        /**
+         * 动画循环
+         * 每帧更新场景并渲染
+         */
+        function animate() {
+            requestAnimationFrame(animate);  // 请求下一帧
+
+            // 获取当前时间(秒)
+            const time = Date.now() * 0.001;
+
+            // 更新每个球体的位置和旋转
+            spheres.forEach((sphere, index) => {
+                // 上下浮动动画
+                sphere.position.y = 1 + Math.sin(time + index) * 0.2;
+                // 旋转动画
+                sphere.rotation.y = time * 0.5;
+            });
+
+            // 更新控制器
+            controls.update();
+            // 更新标签位置
+            updateLabels();
+            // 渲染场景
+            renderer.render(scene, camera);
+        }
+
+        // 启动程序
+        init();
+    </script>
+</body>
+</html>

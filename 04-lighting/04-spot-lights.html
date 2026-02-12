@@ -1,0 +1,569 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Three.js 聚光灯示例</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: Arial, sans-serif;
+        }
+        #info {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 15px;
+            border-radius: 8px;
+            font-size: 14px;
+            max-width: 350px;
+        }
+        #info h2 {
+            margin: 0 0 10px 0;
+            font-size: 18px;
+            color: #4CAF50;
+        }
+        #info p {
+            margin: 5px 0;
+            line-height: 1.5;
+        }
+        #controls {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 15px;
+            border-radius: 8px;
+            font-size: 14px;
+            width: 280px;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+        #controls h3 {
+            margin: 0 0 10px 0;
+            font-size: 16px;
+            color: #4CAF50;
+        }
+        .control-group {
+            margin-bottom: 10px;
+        }
+        .control-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-size: 12px;
+        }
+        .control-group input[type="range"] {
+            width: 100%;
+        }
+        .control-group input[type="color"] {
+            width: 100%;
+            height: 30px;
+            margin-top: 5px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .control-group button {
+            width: 100%;
+            padding: 8px;
+            margin-top: 5px;
+            background: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        .control-group button:hover {
+            background: #45a049;
+        }
+    </style>
+</head>
+<body>
+    <div id="info">
+        <h2>聚光灯示例</h2>
+        <p>展示Three.js聚光灯配置</p>
+        <p>场景包含：</p>
+        <p>• 多个聚光灯</p>
+        <p>• 旋转的几何体</p>
+        <p>• 可调节的聚光灯参数</p>
+        <p>• 阴影投射</p>
+    </div>
+
+    <div id="controls">
+        <h3>聚光灯控制</h3>
+        <div class="control-group">
+            <label>聚光灯1强度: <span id="spot1IntensityValue">1.0</span></label>
+            <input type="range" id="spot1Intensity" min="0" max="3" step="0.1" value="1.0">
+        </div>
+        <div class="control-group">
+            <label>聚光灯1角度: <span id="spot1AngleValue">30</span>°</label>
+            <input type="range" id="spot1Angle" min="5" max="90" step="1" value="30">
+        </div>
+        <div class="control-group">
+            <label>聚光灯1半影: <span id="spot1PenumbraValue">0.5</span></label>
+            <input type="range" id="spot1Penumbra" min="0" max="1" step="0.05" value="0.5">
+        </div>
+        <div class="control-group">
+            <label>聚光灯1距离: <span id="spot1DistanceValue">20</span></label>
+            <input type="range" id="spot1Distance" min="5" max="50" step="1" value="20">
+        </div>
+        <div class="control-group">
+            <label>聚光灯1颜色</label>
+            <input type="color" id="spot1Color" value="#ffffff">
+        </div>
+        <div class="control-group">
+            <label>聚光灯2强度: <span id="spot2IntensityValue">0.8</span></label>
+            <input type="range" id="spot2Intensity" min="0" max="3" step="0.1" value="0.8">
+        </div>
+        <div class="control-group">
+            <label>聚光灯2角度: <span id="spot2AngleValue">45</span>°</label>
+            <input type="range" id="spot2Angle" min="5" max="90" step="1" value="45">
+        </div>
+        <div class="control-group">
+            <label>聚光灯2半影: <span id="spot2PenumbraValue">0.3</span></label>
+            <input type="range" id="spot2Penumbra" min="0" max="1" step="0.05" value="0.3">
+        </div>
+        <div class="control-group">
+            <label>聚光灯2距离: <span id="spot2DistanceValue">15</span></label>
+            <input type="range" id="spot2Distance" min="5" max="50" step="1" value="15">
+        </div>
+        <div class="control-group">
+            <label>聚光灯2颜色</label>
+            <input type="color" id="spot2Color" value="#ff6600">
+        </div>
+        <div class="control-group">
+            <button id="toggleHelpers">切换聚光灯辅助线</button>
+        </div>
+        <div class="control-group">
+            <button id="resetLights">重置聚光灯参数</button>
+        </div>
+    </div>
+
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+
+    <script type="module">
+        // 导入Three.js核心库和轨道控制器
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        // 全局变量声明
+        let scene, camera, renderer, controls;  // 场景、相机、渲染器、控制器
+        let spotLights = [];  // 存储所有聚光灯对象
+        let helpers = [];  // 存储所有聚光灯辅助线
+        let objects = [];  // 存储所有场景对象
+        let showHelpers = true;  // 辅助线显示状态
+
+        /**
+         * 初始化函数
+         * 创建场景、相机、渲染器等基础组件
+         */
+        function init() {
+            // 创建容器div并添加到body
+            const container = document.createElement('div');
+            document.body.appendChild(container);
+
+            // 创建场景对象
+            scene = new THREE.Scene();
+            // 设置场景背景颜色为深灰色
+            scene.background = new THREE.Color(0x222222);
+
+            // 创建透视相机
+            // 参数: 视野角度(60度), 宽高比, 近裁剪面(0.1), 远裁剪面(1000)
+            camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+            // 设置相机位置
+            camera.position.set(0, 8, 15);
+
+            // 创建WebGL渲染器
+            renderer = new THREE.WebGLRenderer({ antialias: true });  // 开启抗锯齿
+            renderer.setSize(window.innerWidth, window.innerHeight);  // 设置渲染尺寸
+            renderer.setPixelRatio(window.devicePixelRatio);  // 设置像素比，适配高清屏
+            renderer.shadowMap.enabled = true;  // 启用阴影映射
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;  // 使用柔和阴影
+            container.appendChild(renderer.domElement);  // 将渲染器添加到容器
+
+            // 创建轨道控制器
+            controls = new OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;  // 启用阻尼效果，使旋转更平滑
+            controls.dampingFactor = 0.05;  // 阻尼系数
+
+            // 创建聚光灯
+            createSpotLights();
+            // 创建场景对象
+            createObjects();
+            // 创建地面
+            createFloor();
+            // 设置控制器
+            setupControls();
+
+            // 监听窗口大小变化
+            window.addEventListener('resize', onWindowResize);
+            // 开始动画循环
+            animate();
+        }
+
+        /**
+         * 创建聚光灯
+         * 创建两个不同配置的聚光灯
+         */
+        function createSpotLights() {
+            // 创建第一个聚光灯 - 白色主光
+            const spotLight1 = new THREE.SpotLight(0xffffff, 1.0);
+            spotLight1.position.set(-5, 8, 5);  // 设置光源位置
+            spotLight1.angle = Math.PI / 6;  // 光锥角度（30度）
+            spotLight1.penumbra = 0.5;  // 半影值（0-1），控制边缘柔和度
+            spotLight1.decay = 2;  // 光线衰减系数
+            spotLight1.distance = 20;  // 光照距离
+            spotLight1.castShadow = true;  // 启用阴影投射
+            spotLight1.shadow.mapSize.width = 1024;  // 阴影贴图宽度
+            spotLight1.shadow.mapSize.height = 1024;  // 阴影贴图高度
+            spotLight1.shadow.camera.near = 0.5;  // 阴影相机近裁剪面
+            spotLight1.shadow.camera.far = 50;  // 阴影相机远裁剪面
+            spotLight1.shadow.focus = 1;  // 阴影焦点（0-1）
+            scene.add(spotLight1);
+            scene.add(spotLight1.target);  // 添加聚光灯目标对象
+            spotLight1.target.position.set(0, 0, 0);  // 设置目标位置
+            spotLights.push(spotLight1);
+
+            // 创建第二个聚光灯 - 橙色辅助光
+            const spotLight2 = new THREE.SpotLight(0xff6600, 0.8);
+            spotLight2.position.set(5, 6, -3);  // 设置光源位置
+            spotLight2.angle = Math.PI / 4;  // 光锥角度（45度）
+            spotLight2.penumbra = 0.3;  // 半影值（0-1），控制边缘柔和度
+            spotLight2.decay = 2;  // 光线衰减系数
+            spotLight2.distance = 15;  // 光照距离
+            spotLight2.castShadow = true;  // 启用阴影投射
+            spotLight2.shadow.mapSize.width = 1024;  // 阴影贴图宽度
+            spotLight2.shadow.mapSize.height = 1024;  // 阴影贴图高度
+            spotLight2.shadow.camera.near = 0.5;  // 阴影相机近裁剪面
+            spotLight2.shadow.camera.far = 50;  // 阴影相机远裁剪面
+            spotLight2.shadow.focus = 1;  // 阴影焦点（0-1）
+            scene.add(spotLight2);
+            scene.add(spotLight2.target);  // 添加聚光灯目标对象
+            spotLight2.target.position.set(0, 0, 0);  // 设置目标位置
+            spotLights.push(spotLight2);
+
+            // 创建聚光灯辅助线 - 可视化聚光灯的光锥
+            const helper1 = new THREE.SpotLightHelper(spotLight1);
+            scene.add(helper1);
+            helpers.push(helper1);
+
+            const helper2 = new THREE.SpotLightHelper(spotLight2);
+            scene.add(helper2);
+            helpers.push(helper2);
+
+            // 创建环境光 - 提供基础照明
+            const ambientLight = new THREE.AmbientLight(0x404040, 0.3);
+            scene.add(ambientLight);
+        }
+
+        /**
+         * 创建场景对象
+         * 创建多个几何体，展示聚光灯效果
+         */
+        function createObjects() {
+            // 创建立方体几何体
+            const boxGeometry = new THREE.BoxGeometry(1.5, 1.5, 1.5);
+            // 创建标准材质
+            const boxMaterial = new THREE.MeshStandardMaterial({
+                color: 0xff6600,  // 橙色
+                roughness: 0.5,  // 粗糙度
+                metalness: 0.5  // 金属度
+            });
+            const box = new THREE.Mesh(boxGeometry, boxMaterial);
+            box.position.set(0, 1.5, 0);
+            box.castShadow = true;  // 投射阴影
+            box.receiveShadow = true;  // 接收阴影
+            scene.add(box);
+            objects.push(box);
+
+            // 创建球体几何体
+            const sphereGeometry = new THREE.SphereGeometry(0.8, 32, 32);
+            // 创建标准材质
+            const sphereMaterial = new THREE.MeshStandardMaterial({
+                color: 0x00ff00,  // 绿色
+                roughness: 0.3,  // 粗糙度
+                metalness: 0.7  // 金属度
+            });
+            const sphere = new THREE.Mesh(sphereGeometry, sphereMaterial);
+            sphere.position.set(-2.5, 1, 2);
+            sphere.castShadow = true;  // 投射阴影
+            sphere.receiveShadow = true;  // 接收阴影
+            scene.add(sphere);
+            objects.push(sphere);
+
+            // 创建圆锥体几何体
+            const coneGeometry = new THREE.ConeGeometry(0.8, 1.5, 32);
+            // 创建标准材质
+            const coneMaterial = new THREE.MeshStandardMaterial({
+                color: 0x0066ff,  // 蓝色
+                roughness: 0.4,  // 粗糙度
+                metalness: 0.6  // 金属度
+            });
+            const cone = new THREE.Mesh(coneGeometry, coneMaterial);
+            cone.position.set(2.5, 1, 2);
+            cone.castShadow = true;  // 投射阴影
+            cone.receiveShadow = true;  // 接收阴影
+            scene.add(cone);
+            objects.push(cone);
+
+            // 创建圆环几何体
+            const torusGeometry = new THREE.TorusGeometry(0.6, 0.2, 16, 100);
+            // 创建标准材质
+            const torusMaterial = new THREE.MeshStandardMaterial({
+                color: 0xff00ff,  // 紫色
+                roughness: 0.2,  // 粗糙度
+                metalness: 0.8  // 金属度
+            });
+            const torus = new THREE.Mesh(torusGeometry, torusMaterial);
+            torus.position.set(0, 1, -2);
+            torus.castShadow = true;  // 投射阴影
+            torus.receiveShadow = true;  // 接收阴影
+            scene.add(torus);
+            objects.push(torus);
+        }
+
+        /**
+         * 创建地面
+         * 创建接收阴影的地面和网格辅助线
+         */
+        function createFloor() {
+            // 创建平面几何体
+            const floorGeometry = new THREE.PlaneGeometry(20, 20);
+            // 创建标准材质
+            const floorMaterial = new THREE.MeshStandardMaterial({
+                color: 0x444444,  // 深灰色
+                roughness: 0.8,  // 粗糙度
+                metalness: 0.2  // 金属度
+            });
+            const floor = new THREE.Mesh(floorGeometry, floorMaterial);
+            floor.rotation.x = -Math.PI / 2;  // 旋转90度使其水平
+            floor.position.y = 0;  // 设置地面高度
+            floor.receiveShadow = true;  // 接收阴影
+            scene.add(floor);
+
+            // 创建网格辅助线
+            const gridHelper = new THREE.GridHelper(20, 20, 0x666666, 0x555555);
+            gridHelper.position.y = 0.01;  // 稍微抬高避免z-fighting
+            scene.add(gridHelper);
+        }
+
+        /**
+         * 设置控制器
+         * 为滑块和按钮添加事件监听器
+         */
+        function setupControls() {
+            const spot1IntensitySlider = document.getElementById('spot1Intensity');
+            const spot1AngleSlider = document.getElementById('spot1Angle');
+            const spot1PenumbraSlider = document.getElementById('spot1Penumbra');
+            const spot1DistanceSlider = document.getElementById('spot1Distance');
+            const spot1ColorPicker = document.getElementById('spot1Color');
+            const spot2IntensitySlider = document.getElementById('spot2Intensity');
+            const spot2AngleSlider = document.getElementById('spot2Angle');
+            const spot2PenumbraSlider = document.getElementById('spot2Penumbra');
+            const spot2DistanceSlider = document.getElementById('spot2Distance');
+            const spot2ColorPicker = document.getElementById('spot2Color');
+            const toggleHelpersBtn = document.getElementById('toggleHelpers');
+            const resetBtn = document.getElementById('resetLights');
+
+            const spot1IntensityValue = document.getElementById('spot1IntensityValue');
+            const spot1AngleValue = document.getElementById('spot1AngleValue');
+            const spot1PenumbraValue = document.getElementById('spot1PenumbraValue');
+            const spot1DistanceValue = document.getElementById('spot1DistanceValue');
+            const spot2IntensityValue = document.getElementById('spot2IntensityValue');
+            const spot2AngleValue = document.getElementById('spot2AngleValue');
+            const spot2PenumbraValue = document.getElementById('spot2PenumbraValue');
+            const spot2DistanceValue = document.getElementById('spot2DistanceValue');
+
+            // 聚光灯1强度滑块
+            spot1IntensitySlider.addEventListener('input', (e) => {
+                const value = parseFloat(e.target.value);
+                spot1IntensityValue.textContent = value.toFixed(1);
+                spotLights[0].intensity = value;  // 更新聚光灯强度
+            });
+
+            // 聚光灯1角度滑块
+            spot1AngleSlider.addEventListener('input', (e) => {
+                const value = parseInt(e.target.value);
+                spot1AngleValue.textContent = value;
+                spotLights[0].angle = value * (Math.PI / 180);  // 转换为弧度
+                helpers[0].update();  // 更新辅助线
+            });
+
+            // 聚光灯1半影滑块
+            spot1PenumbraSlider.addEventListener('input', (e) => {
+                const value = parseFloat(e.target.value);
+                spot1PenumbraValue.textContent = value.toFixed(2);
+                spotLights[0].penumbra = value;  // 更新半影值
+                helpers[0].update();  // 更新辅助线
+            });
+
+            // 聚光灯1距离滑块
+            spot1DistanceSlider.addEventListener('input', (e) => {
+                const value = parseInt(e.target.value);
+                spot1DistanceValue.textContent = value;
+                spotLights[0].distance = value;  // 更新光照距离
+                helpers[0].update();  // 更新辅助线
+            });
+
+            // 聚光灯1颜色选择器
+            spot1ColorPicker.addEventListener('input', (e) => {
+                spotLights[0].color.set(e.target.value);  // 更新聚光灯颜色
+            });
+
+            // 聚光灯2强度滑块
+            spot2IntensitySlider.addEventListener('input', (e) => {
+                const value = parseFloat(e.target.value);
+                spot2IntensityValue.textContent = value.toFixed(1);
+                spotLights[1].intensity = value;  // 更新聚光灯强度
+            });
+
+            // 聚光灯2角度滑块
+            spot2AngleSlider.addEventListener('input', (e) => {
+                const value = parseInt(e.target.value);
+                spot2AngleValue.textContent = value;
+                spotLights[1].angle = value * (Math.PI / 180);  // 转换为弧度
+                helpers[1].update();  // 更新辅助线
+            });
+
+            // 聚光灯2半影滑块
+            spot2PenumbraSlider.addEventListener('input', (e) => {
+                const value = parseFloat(e.target.value);
+                spot2PenumbraValue.textContent = value.toFixed(2);
+                spotLights[1].penumbra = value;  // 更新半影值
+                helpers[1].update();  // 更新辅助线
+            });
+
+            // 聚光灯2距离滑块
+            spot2DistanceSlider.addEventListener('input', (e) => {
+                const value = parseInt(e.target.value);
+                spot2DistanceValue.textContent = value;
+                spotLights[1].distance = value;  // 更新光照距离
+                helpers[1].update();  // 更新辅助线
+            });
+
+            // 聚光灯2颜色选择器
+            spot2ColorPicker.addEventListener('input', (e) => {
+                spotLights[1].color.set(e.target.value);  // 更新聚光灯颜色
+            });
+
+            // 切换辅助线显示按钮
+            toggleHelpersBtn.addEventListener('click', () => {
+                showHelpers = !showHelpers;
+                helpers.forEach(helper => {
+                    helper.visible = showHelpers;  // 更新辅助线可见性
+                });
+            });
+
+            // 重置聚光灯参数按钮
+            resetBtn.addEventListener('click', () => {
+                spotLights[0].intensity = 1.0;  // 重置聚光灯1强度
+                spot1IntensitySlider.value = 1.0;
+                spot1IntensityValue.textContent = '1.0';
+
+                spotLights[0].angle = Math.PI / 6;  // 重置聚光灯1角度
+                spot1AngleSlider.value = 30;
+                spot1AngleValue.textContent = '30';
+
+                spotLights[0].penumbra = 0.5;  // 重置聚光灯1半影
+                spot1PenumbraSlider.value = 0.5;
+                spot1PenumbraValue.textContent = '0.5';
+
+                spotLights[0].distance = 20;  // 重置聚光灯1距离
+                spot1DistanceSlider.value = 20;
+                spot1DistanceValue.textContent = '20';
+
+                spotLights[0].color.set(0xffffff);  // 重置聚光灯1颜色
+                spot1ColorPicker.value = '#ffffff';
+
+                spotLights[1].intensity = 0.8;  // 重置聚光灯2强度
+                spot2IntensitySlider.value = 0.8;
+                spot2IntensityValue.textContent = '0.8';
+
+                spotLights[1].angle = Math.PI / 4;  // 重置聚光灯2角度
+                spot2AngleSlider.value = 45;
+                spot2AngleValue.textContent = '45';
+
+                spotLights[1].penumbra = 0.3;  // 重置聚光灯2半影
+                spot2PenumbraSlider.value = 0.3;
+                spot2PenumbraValue.textContent = '0.3';
+
+                spotLights[1].distance = 15;  // 重置聚光灯2距离
+                spot2DistanceSlider.value = 15;
+                spot2DistanceValue.textContent = '15';
+
+                spotLights[1].color.set(0xff6600);  // 重置聚光灯2颜色
+                spot2ColorPicker.value = '#ff6600';
+
+                helpers.forEach(helper => helper.update());  // 更新辅助线
+            });
+        }
+
+        /**
+         * 窗口大小变化处理
+         * 更新相机和渲染器参数
+         */
+        function onWindowResize() {
+            // 更新相机宽高比
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            // 更新渲染器尺寸
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        /**
+         * 动画循环
+         * 每帧更新场景并渲染
+         */
+        function animate() {
+            requestAnimationFrame(animate);  // 请求下一帧
+
+            // 获取当前时间（秒）
+            const time = Date.now() * 0.001;
+
+            // 更新每个对象的旋转
+            objects.forEach((obj, index) => {
+                // 旋转动画 - 每个对象有不同的旋转速度和轴
+                if (index === 0) {
+                    obj.rotation.x = time * 0.5;
+                    obj.rotation.y = time * 0.3;
+                } else if (index === 1) {
+                    obj.rotation.y = time * 0.4;
+                } else if (index === 2) {
+                    obj.rotation.x = time * 0.3;
+                    obj.rotation.z = time * 0.2;
+                } else if (index === 3) {
+                    obj.rotation.x = time * 0.4;
+                    obj.rotation.y = time * 0.6;
+                }
+            });
+
+            // 更新聚光灯目标位置 - 让聚光灯跟随中心立方体
+            spotLights[0].target.position.set(0, 1.5 + Math.sin(time) * 0.3, 0);
+            spotLights[1].target.position.set(0, 1.5 + Math.cos(time) * 0.3, 0);
+
+            // 更新辅助线
+            helpers.forEach(helper => helper.update());
+
+            // 更新控制器
+            controls.update();
+            // 渲染场景
+            renderer.render(scene, camera);
+        }
+
+        // 启动程序
+        init();
+    </script>
+</body>
+</html>

@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Three.js 环境光照示例</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: Arial, sans-serif;
+        }
+        #info {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 15px;
+            border-radius: 8px;
+            font-size: 14px;
+            max-width: 350px;
+        }
+        #info h2 {
+            margin: 0 0 10px 0;
+            font-size: 18px;
+            color: #4CAF50;
+        }
+        #info p {
+            margin: 5px 0;
+            line-height: 1.5;
+        }
+        #controls {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 15px;
+            border-radius: 8px;
+            font-size: 14px;
+            width: 280px;
+        }
+        #controls h3 {
+            margin: 0 0 10px 0;
+            font-size: 16px;
+            color: #4CAF50;
+        }
+        .control-group {
+            margin-bottom: 10px;
+        }
+        .control-group label {
+            display: block;
+            margin-bottom: 5px;
+        }
+        .control-group input[type="range"] {
+            width: 100%;
+        }
+        .control-group select {
+            width: 100%;
+            padding: 5px;
+            margin-top: 5px;
+            background: #333;
+            color: white;
+            border: 1px solid #555;
+            border-radius: 4px;
+        }
+        .control-group button {
+            width: 100%;
+            padding: 8px;
+            margin-top: 5px;
+            background: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        .control-group button:hover {
+            background: #45a049;
+        }
+    </style>
+</head>
+<body>
+    <div id="info">
+        <h2>环境光照示例</h2>
+        <p>展示HDR环境光照和反射</p>
+        <p>场景包含：</p>
+        <p>• HDR环境贴图</p>
+        <p>• 金属球体（反射环境）</p>
+        <p>• 粗糙球体（漫反射）</p>
+        <p>• 可调节的环境参数</p>
+    </div>
+
+    <div id="controls">
+        <h3>环境光照控制</h3>
+        <div class="control-group">
+            <label>环境强度: <span id="envIntensityValue">1.0</span></label>
+            <input type="range" id="envIntensity" min="0" max="3" step="0.1" value="1.0">
+        </div>
+        <div class="control-group">
+            <label>背景强度: <span id="bgIntensityValue">1.0</span></label>
+            <input type="range" id="bgIntensity" min="0" max="3" step="0.1" value="1.0">
+        </div>
+        <div class="control-group">
+            <label>旋转环境: <span id="rotationValue">0</span>°</label>
+            <input type="range" id="rotation" min="0" max="360" step="1" value="0">
+        </div>
+        <div class="control-group">
+            <label>背景类型</label>
+            <select id="bgType">
+                <option value="sceneBackground">场景背景</option>
+                <option value="sceneEnvironment">环境贴图</option>
+                <option value="both">两者都使用</option>
+            </select>
+        </div>
+        <div class="control-group">
+            <button id="toggleRotation">自动旋转环境</button>
+        </div>
+    </div>
+
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+
+    <script type="module">
+        // 导入Three.js核心库、轨道控制器和环境贴图加载器
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
+
+        // 全局变量声明
+        let scene, camera, renderer, controls;  // 场景、相机、渲染器、控制器
+        let pmremGenerator;  // PMREM生成器 - 用于预过滤环境贴图
+        let spheres = [];  // 存储所有球体网格对象
+        let autoRotate = false;  // 自动旋转环境状态
+        let envRotation = 0;  // 环境旋转角度
+
+        /**
+         * 初始化函数
+         * 创建场景、相机、渲染器等基础组件
+         */
+        function init() {
+            // 创建容器div并添加到body
+            const container = document.createElement('div');
+            document.body.appendChild(container);
+
+            // 创建场景对象
+            scene = new THREE.Scene();
+            // 设置场景背景颜色为深灰色
+            scene.background = new THREE.Color(0x222222);
+
+            // 创建透视相机
+            // 参数: 视野角度(60度), 宽高比, 近裁剪面(0.1), 远裁剪面(1000)
+            camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+            // 设置相机位置
+            camera.position.set(0, 2, 8);
+
+            // 创建WebGL渲染器
+            renderer = new THREE.WebGLRenderer({ antialias: true });  // 开启抗锯齿
+            renderer.setSize(window.innerWidth, window.innerHeight);  // 设置渲染尺寸
+            renderer.setPixelRatio(window.devicePixelRatio);  // 设置像素比，适配高清屏
+            renderer.toneMapping = THREE.ACESFilmicToneMapping;  // 使用ACES电影色调映射
+            renderer.toneMappingExposure = 1.0;  // 设置色调映射曝光
+            renderer.shadowMap.enabled = true;  // 启用阴影映射
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;  // 使用柔和阴影
+            container.appendChild(renderer.domElement);  // 将渲染器添加到容器
+
+            // 创建轨道控制器
+            controls = new OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;  // 启用阻尼效果，使旋转更平滑
+            controls.dampingFactor = 0.05;  // 阻尼系数
+
+            // 创建PMREM生成器 - 用于生成预过滤的环境贴图
+            // PMREM (Pre-filtered Mipmapped Radiance Environment Map) 提供高质量的环境光照
+            pmremGenerator = new THREE.PMREMGenerator(renderer);
+            pmremGenerator.compileEquirectangularShader();  // 编译等距柱状投影着色器
+
+            // 加载HDR环境贴图
+            loadEnvironment();
+            // 创建场景对象
+            createObjects();
+            // 创建地面
+            createFloor();
+            // 设置控制器
+            setupControls();
+
+            // 监听窗口大小变化
+            window.addEventListener('resize', onWindowResize);
+            // 开始动画循环
+            animate();
+        }
+
+        /**
+         * 加载HDR环境贴图
+         * 使用RGBELoader加载HDR格式的环境贴图
+         */
+        function loadEnvironment() {
+            // 创建RGBE加载器 - 用于加载HDR格式的环境贴图
+            const rgbeLoader = new RGBELoader();
+            // 设置加载器使用PMREM生成器
+            rgbeLoader.load(
+                'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/textures/equirectangular/venice_sunset_1k.hdr',
+                function (texture) {
+                    // 将HDR贴图转换为PMREM环境贴图
+                    const envMap = pmremGenerator.fromEquirectangular(texture).texture;
+                    
+                    // 设置场景环境贴图 - 用于材质的环境光照和反射
+                    scene.environment = envMap;
+                    scene.environmentIntensity = 1.0;  // 设置环境贴图强度
+                    
+                    // 设置场景背景 - 使用环境贴图作为背景
+                    scene.background = envMap;
+                    scene.backgroundIntensity = 1.0;  // 设置背景强度
+                    
+                    // 释放HDR纹理资源
+                    texture.dispose();
+                }
+            );
+        }
+
+        /**
+         * 创建场景对象
+         * 创建多个不同材质属性的球体，展示环境光照效果
+         */
+        function createObjects() {
+            // 创建球体几何体
+            const geometry = new THREE.SphereGeometry(0.8, 64, 64);
+
+            // 定义不同材质属性的球体
+            const materials = [
+                // 高反射金属球 - 完美反射环境
+                {
+                    color: 0xffffff,
+                    roughness: 0.0,  // 完全光滑
+                    metalness: 1.0,  // 完全金属
+                    envMapIntensity: 1.0  // 环境反射强度
+                },
+                // 中等反射金属球
+                {
+                    color: 0xffcc00,
+                    roughness: 0.3,  // 中等粗糙
+                    metalness: 1.0,  // 完全金属
+                    envMapIntensity: 1.0
+                },
+                // 粗糙金属球
+                {
+                    color: 0xff6600,
+                    roughness: 0.7,  // 较粗糙
+                    metalness: 1.0,  // 完全金属
+                    envMapIntensity: 1.0
+                },
+                // 光滑非金属球 - 有光泽的塑料
+                {
+                    color: 0x00ff00,
+                    roughness: 0.1,  // 很光滑
+                    metalness: 0.0,  // 非金属
+                    envMapIntensity: 1.0
+                },
+                // 中等非金属球
+                {
+                    color: 0x0066ff,
+                    roughness: 0.5,  // 中等粗糙
+                    metalness: 0.0,  // 非金属
+                    envMapIntensity: 1.0
+                },
+                // 粗糙非金属球 - 哑光表面
+                {
+                    color: 0xff00ff,
+                    roughness: 0.9,  // 很粗糙
+                    metalness: 0.0,  // 非金属
+                    envMapIntensity: 1.0
+                }
+            ];
+
+            // 定义球体位置 - 排列成两行三列
+            const positions = [
+                { x: -3, y: 1.5, z: 0 },
+                { x: 0, y: 1.5, z: 0 },
+                { x: 3, y: 1.5, z: 0 },
+                { x: -3, y: 0, z: 0 },
+                { x: 0, y: 0, z: 0 },
+                { x: 3, y: 0, z: 0 }
+            ];
+
+            // 为每个材质和位置创建球体
+            materials.forEach((matProps, index) => {
+                const material = new THREE.MeshStandardMaterial(matProps);
+                const sphere = new THREE.Mesh(geometry, material);
+                sphere.position.set(positions[index].x, positions[index].y, positions[index].z);
+                sphere.castShadow = true;  // 投射阴影
+                sphere.receiveShadow = true;  // 接收阴影
+                scene.add(sphere);
+                spheres.push(sphere);
+            });
+        }
+
+        /**
+         * 创建地面
+         * 创建接收阴影的地面
+         */
+        function createFloor() {
+            // 创建平面几何体
+            const floorGeometry = new THREE.PlaneGeometry(20, 20);
+            // 创建标准材质
+            const floorMaterial = new THREE.MeshStandardMaterial({
+                color: 0x444444,  // 深灰色
+                roughness: 0.8,  // 粗糙度
+                metalness: 0.2  // 金属度
+            });
+            const floor = new THREE.Mesh(floorGeometry, floorMaterial);
+            floor.rotation.x = -Math.PI / 2;  // 旋转90度使其水平
+            floor.position.y = -0.9;  // 设置地面高度
+            floor.receiveShadow = true;  // 接收阴影
+            scene.add(floor);
+
+            // 创建网格辅助线
+            const gridHelper = new THREE.GridHelper(20, 20, 0x666666, 0x555555);
+            gridHelper.position.y = -0.89;  // 稍微抬高避免z-fighting
+            scene.add(gridHelper);
+        }
+
+        /**
+         * 设置控制器
+         * 为滑块和按钮添加事件监听器
+         */
+        function setupControls() {
+            const envIntensitySlider = document.getElementById('envIntensity');
+            const bgIntensitySlider = document.getElementById('bgIntensity');
+            const rotationSlider = document.getElementById('rotation');
+            const bgTypeSelect = document.getElementById('bgType');
+            const toggleRotationBtn = document.getElementById('toggleRotation');
+
+            const envIntensityValue = document.getElementById('envIntensityValue');
+            const bgIntensityValue = document.getElementById('bgIntensityValue');
+            const rotationValue = document.getElementById('rotationValue');
+
+            // 环境强度滑块
+            envIntensitySlider.addEventListener('input', (e) => {
+                const value = parseFloat(e.target.value);
+                envIntensityValue.textContent = value.toFixed(1);
+                scene.environmentIntensity = value;  // 更新环境贴图强度
+            });
+
+            // 背景强度滑块
+            bgIntensitySlider.addEventListener('input', (e) => {
+                const value = parseFloat(e.target.value);
+                bgIntensityValue.textContent = value.toFixed(1);
+                scene.backgroundIntensity = value;  // 更新背景强度
+            });
+
+            // 旋转环境滑块
+            rotationSlider.addEventListener('input', (e) => {
+                const value = parseInt(e.target.value);
+                rotationValue.textContent = value;
+                envRotation = value * (Math.PI / 180);  // 转换为弧度
+                updateEnvironmentRotation();  // 更新环境旋转
+            });
+
+            // 背景类型选择
+            bgTypeSelect.addEventListener('change', (e) => {
+                const bgType = e.target.value;
+                if (bgType === 'sceneBackground') {
+                    scene.background = scene.environment;  // 使用环境贴图作为背景
+                } else if (bgType === 'sceneEnvironment') {
+                    scene.background = new THREE.Color(0x222222);  // 使用纯色背景
+                } else if (bgType === 'both') {
+                    scene.background = scene.environment;  // 两者都使用环境贴图
+                }
+            });
+
+            // 自动旋转环境按钮
+            toggleRotationBtn.addEventListener('click', () => {
+                autoRotate = !autoRotate;
+                toggleRotationBtn.textContent = autoRotate ? '停止自动旋转' : '自动旋转环境';
+            });
+        }
+
+        /**
+         * 更新环境旋转
+         * 旋转环境贴图的矩阵
+         */
+        function updateEnvironmentRotation() {
+            if (scene.environment) {
+                // 创建旋转矩阵
+                const rotationMatrix = new THREE.Matrix4();
+                rotationMatrix.makeRotationY(envRotation);
+                // 应用旋转到环境贴图
+                scene.environment.matrix = rotationMatrix;
+                scene.environment.matrixAutoUpdate = false;
+            }
+            if (scene.background && scene.background.isTexture) {
+                // 创建旋转矩阵
+                const rotationMatrix = new THREE.Matrix4();
+                rotationMatrix.makeRotationY(envRotation);
+                // 应用旋转到背景贴图
+                scene.background.matrix = rotationMatrix;
+                scene.background.matrixAutoUpdate = false;
+            }
+        }
+
+        /**
+         * 窗口大小变化处理
+         * 更新相机和渲染器参数
+         */
+        function onWindowResize() {
+            // 更新相机宽高比
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            // 更新渲染器尺寸
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        /**
+         * 动画循环
+         * 每帧更新场景并渲染
+         */
+        function animate() {
+            requestAnimationFrame(animate);  // 请求下一帧
+
+            // 获取当前时间（秒）
+            const time = Date.now() * 0.001;
+
+            // 自动旋转环境
+            if (autoRotate) {
+                envRotation += 0.002;  // 每帧增加旋转角度
+                const rotationSlider = document.getElementById('rotation');
+                const rotationValue = document.getElementById('rotationValue');
+                const degrees = Math.round(envRotation * (180 / Math.PI)) % 360;
+                rotationSlider.value = degrees;
+                rotationValue.textContent = degrees;
+                updateEnvironmentRotation();  // 更新环境旋转
+            }
+
+            // 更新每个球体的位置 - 上下浮动动画
+            spheres.forEach((sphere, index) => {
+                const baseY = index < 3 ? 1.5 : 0;
+                sphere.position.y = baseY + Math.sin(time * 0.5 + index * 0.5) * 0.1;
+            });
+
+            // 更新控制器
+            controls.update();
+            // 渲染场景
+            renderer.render(scene, camera);
+        }
+
+        // 启动程序
+        init();
+    </script>
+</body>
+</html>
